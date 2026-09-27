@@ -1,0 +1,65 @@
+{
+  "id": "bailian-decisions",
+  "name": "Bailian Decisions",
+  "version": "1.0.0",
+  "description": "Aliyun Bailian (Model Studio) System One decision provider: typed choice / score / boolean judgments through decision-model-preview.",
+  "categories": [
+    "other"
+  ],
+  "activation": {
+    "onStartup": true
+  },
+  "contracts": {
+    "decisionProviders": [
+      "bailian-decisions"
+    ],
+    "tools": [
+      "bailian_decide"
+    ]
+  },
+  "toolMetadata": {
+    "bailian_decide": {
+      "optional": true
+    }
+  },
+  "decisionModels": [
+    {
+      "provider": "bailian-decisions",
+      "id": "decision-model-preview",
+      "name": "Bailian 决策模型 (preview)"
+    }
+  ],
+  "configContracts": {
+    "secretInputs": {
+      "paths": [
+        {
+          "path": "apiKey",
+          "expected": "string",
+          "ownerKind": "capability"
+        }
+      ]
+    }
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "keyFile": {
+        "type": "string",
+        "description": "Path to a file holding the Bailian API key (0600). Defaults to ~/.openclaw/.secrets/dashscope-decision.key."
+      },
+      "apiKey": {
+        "type": "string",
+        "description": "Inline Bailian API key. Prefer keyFile; this value lives in config and is stored in plaintext unless supplied as a SecretRef."
+      },
+      "endpoint": {
+        "type": "string",
+        "description": "System One endpoint host. Default trial.cn-beijing.maas.aliyuncs.com; use <WorkspaceId>.cn-beijing.maas.aliyuncs.com for production."
+      },
+      "timeoutMs": {
+        "type": "number",
+        "description": "Per-request timeout in milliseconds (host caps the effective deadline at 30000). Default 20000."
+      }
+    }
+  }
+}
