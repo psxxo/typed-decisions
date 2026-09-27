@@ -1,7 +1,7 @@
 {
-  "name": "@psxxo/bailian-decisions",
+  "name": "@psxxo/typed-decisions",
   "version": "1.0.0",
-  "description": "Aliyun Bailian (Model Studio) System One decision provider for OpenClaw's decisionModel role: typed choice / score / boolean judgments.",
+  "description": "System One typed decision provider for OpenClaw's decisionModel role: choice / score / boolean judgments with probability distributions.",
   "type": "module",
   "license": "MIT",
   "files": [
@@ -14,16 +14,17 @@
     "openclaw",
     "openclaw-plugin",
     "decision-model",
-    "bailian",
-    "aliyun",
-    "model-studio",
+    "decision",
+    "rubric",
+    "classification",
+    "scoring",
     "system-one"
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/psxxo/bailian-decisions.git"
+    "url": "git+https://github.com/psxxo/typed-decisions.git"
   },
-  "homepage": "https://clawhub.ai/psxxo/plugins/bailian-decisions",
+  "homepage": "https://clawhub.ai/psxxo/plugins/typed-decisions",
   "peerDependencies": {
     "openclaw": ">=2026.9.6"
   },

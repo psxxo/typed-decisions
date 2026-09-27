@@ -1,16 +1,15 @@
-# Bailian Decisions
+# Typed Decisions
 
-OpenClaw **decision model** provider backed by Aliyun Bailian (Model Studio)
-System One — `decision-model-preview`. One forward pass returns typed
-`choice` / `score` / `boolean` judgments with probability distributions and
-confidence, without generating text.
+OpenClaw **decision model** provider that speaks the System One protocol. One
+forward pass returns typed `choice` / `score` / `boolean` judgments with
+probability distributions and confidence, without generating text.
 
-- Model reference: `bailian-decisions/decision-model-preview`
-- Endpoint: `POST https://<endpoint>/compatible-mode/v1/systemone`
-- Upstream docs: <https://help.aliyun.com/zh/model-studio/decision-model-api>
+- Runtime id: `typed-decisions`
+- Model reference: `typed-decisions/decision-model-preview`
+- Request: `POST <endpoint>/compatible-mode/v1/systemone`
 
-It registers `contracts.decisionProviders: ["bailian-decisions"]` and appears in
-the Control UI's **Decision** picker only — never in the chat/primary/fallback/
+It registers `contracts.decisionProviders: ["typed-decisions"]` and appears in the
+Control UI's **Decision** picker only — never in the chat / primary / fallback /
 utility model pickers.
 
 ## Configuration
@@ -19,35 +18,35 @@ utility model pickers.
 {
   plugins: {
     entries: {
-      "bailian-decisions": {
+      "typed-decisions": {
         enabled: true,
         config: {
-          // Default: ~/.openclaw/.secrets/dashscope-decision.key (chmod 600)
-          keyFile: "~/.openclaw/.secrets/dashscope-decision.key",
-          // Default: trial.cn-beijing.maas.aliyuncs.com
-          // Production: "<WorkspaceId>.cn-beijing.maas.aliyuncs.com"
-          endpoint: "trial.cn-beijing.maas.aliyuncs.com",
+          // Required: System One endpoint host (bare host or origin URL).
+          endpoint: "<host>",
+          // Optional: file holding the API key (0600).
+          // Default: ~/.openclaw/.secrets/decision-model.key
+          keyFile: "~/.openclaw/.secrets/decision-model.key",
           timeoutMs: 20000,
         },
       },
     },
   },
   agents: {
-    defaults: { decisionModel: "bailian-decisions/decision-model-preview" },
+    defaults: { decisionModel: "typed-decisions/decision-model-preview" },
   },
 }
 ```
 
-`apiKey` is also accepted (an inline string, or a SecretRef when the host
+`credential` is also accepted (an inline string, or a SecretRef when the host
 prepares it). `keyFile` is preferred: the secret stays out of the config file.
 
 ## Optional evaluation tool
 
-The plugin also registers an **optional** `bailian_decide` tool for explicit
+The plugin also registers an **optional** `typed_decide` tool for explicit
 agent-side evaluations. It is off until allowlisted:
 
 ```json5
-{ tools: { allow: ["bailian_decide"] } }
+{ tools: { allow: ["typed_decide"] } }
 ```
 
 It accepts `state` plus a `questions` map and returns the evaluated outcome.

@@ -1,12 +1,11 @@
-// Bailian (Aliyun Model Studio) System One decision provider for OpenClaw.
+// Typed Decisions — a System One decision provider for OpenClaw's decisionModel role.
 //
-// Maps OpenClaw's decision question types onto the Bailian System One API:
+// Maps OpenClaw's decision question types onto the System One protocol:
 //   choice  ->  choice  (reported label + probabilities + confidence)
 //   score   ->  score   (fractional zero-based index + index-aligned probabilities)
 //   boolean ->  noul    (P(true))
 //
-// Endpoint: POST https://<endpoint>/compatible-mode/v1/systemone
-// Docs:     https://help.aliyun.com/zh/model-studio/decision-model-api
+// Endpoint: POST <endpoint>/compatible-mode/v1/systemone
 //
 // Design constraints for long-term stability:
 //   * no build step, no runtime dependencies, plain ESM JavaScript
@@ -21,11 +20,10 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { readFile, stat } from "node:fs/promises";
 
-const PLUGIN_ID = "bailian-decisions";
-const PROVIDER_ID = "bailian-decisions";
+const PLUGIN_ID = "typed-decisions";
+const PROVIDER_ID = "typed-decisions";
 const DEFAULT_MODEL = "decision-model-preview";
-const DEFAULT_KEY_FILE = join(homedir(), ".openclaw", ".secrets", "dashscope-decision.key");
-const DEFAULT_ENDPOINT = "trial.cn-beijing.maas.aliyuncs.com";
+const DEFAULT_KEY_FILE = join(homedir(), ".openclaw", ".secrets", "decision-model.key");
 const DEFAULT_TIMEOUT_MS = 20_000;
 const HOST_MAX_TIMEOUT_MS = 30_000;
 const MAX_RESPONSE_BYTES = 1_000_000;
@@ -34,7 +32,7 @@ const KEY_CACHE_TTL_MS = 15_000;
 /** Typed downstream failure; maps 1:1 onto the contract's ProviderFailureReason. */
 class Unavailable extends Error {
   constructor(reason, retryAfterMs) {
-    super(`bailian-decisions: ${reason}`);
+    super(`typed-decisions: ${reason}`);
     this.name = "UnavailableDecision";
     this.reason = reason;
     if (typeof retryAfterMs === "number" && Number.isFinite(retryAfterMs)) {
@@ -55,10 +53,11 @@ function expandHome(value) {
   return value;
 }
 
+/** Accepts a bare host or an origin URL; returns a bare host, or undefined. */
 function normalizeEndpoint(value) {
-  if (typeof value !== "string" || !value.trim()) return DEFAULT_ENDPOINT;
+  if (typeof value !== "string" || !value.trim()) return undefined;
   const host = value.trim().replace(/^https?:\/\//i, "").split("/")[0].trim();
-  return host || DEFAULT_ENDPOINT;
+  return host || undefined;
 }
 
 function normalizeConfig(raw) {
@@ -69,7 +68,7 @@ function normalizeConfig(raw) {
     typeof cfg.timeoutMs === "number" && Number.isFinite(cfg.timeoutMs) && cfg.timeoutMs > 0
       ? Math.min(cfg.timeoutMs, HOST_MAX_TIMEOUT_MS)
       : DEFAULT_TIMEOUT_MS;
-  return { apiKey: cfg.apiKey, keyFile, endpoint: normalizeEndpoint(cfg.endpoint), timeoutMs };
+  return { credential: cfg.credential, keyFile, endpoint: normalizeEndpoint(cfg.endpoint), timeoutMs };
 }
 
 /** DecisionEntry -> plain text for the vendor rubric fields. */
@@ -94,14 +93,19 @@ function modelName(context) {
 /** OpenClaw question batch -> System One request body. */
 function buildRequest(model, batch) {
   const questions = {};
-  const source = batch && typeof batch === "object" && batch.questions && typeof batch.questions === "object" ? batch.questions : {};
+  const source =
+    batch && typeof batch === "object" && batch.questions && typeof batch.questions === "object"
+      ? batch.questions
+      : {};
   for (const [id, question] of Object.entries(source)) {
     if (!question || typeof question !== "object") return { error: "unsupported-input" };
     const instructions = entryText(question.instructions);
     if (question.type === "choice") {
       const criteria = {};
       const offered = question.criteria && typeof question.criteria === "object" ? question.criteria : {};
-      for (const [label, description] of Object.entries(offered)) criteria[String(label)] = entryText(description) ?? "";
+      for (const [label, description] of Object.entries(offered)) {
+        criteria[String(label)] = entryText(description) ?? "";
+      }
       if (Object.keys(criteria).length < 2) return { error: "unsupported-input" };
       questions[id] = { type: "choice", criteria, ...(instructions !== undefined ? { instructions } : {}) };
     } else if (question.type === "score") {
@@ -112,9 +116,9 @@ function buildRequest(model, batch) {
       questions[id] = { type: "score", criteria, ...(instructions !== undefined ? { instructions } : {}) };
     } else if (question.type === "boolean") {
       const criteria = {};
-      const source = question.criteria && typeof question.criteria === "object" ? question.criteria : {};
-      if (source.true !== undefined && source.true !== null) criteria.true = entryText(source.true);
-      if (source.false !== undefined && source.false !== null) criteria.false = entryText(source.false);
+      const offered = question.criteria && typeof question.criteria === "object" ? question.criteria : {};
+      if (offered.true !== undefined && offered.true !== null) criteria.true = entryText(offered.true);
+      if (offered.false !== undefined && offered.false !== null) criteria.false = entryText(offered.false);
       questions[id] = {
         type: "noul",
         ...(instructions !== undefined ? { instructions } : {}),
@@ -210,7 +214,7 @@ function retryAfterMs(response) {
   return Number.isFinite(seconds) && seconds >= 0 ? seconds * 1000 : undefined;
 }
 
-async function callSystemOne({ endpoint, payload, apiKey, signal, timeoutMs }) {
+async function callSystemOne({ endpoint, payload, credential, signal, timeoutMs }) {
   const url = `https://${endpoint}/compatible-mode/v1/systemone`;
   const controller = new AbortController();
   const outerAborted = () => Boolean(signal?.aborted);
@@ -225,7 +229,10 @@ async function callSystemOne({ endpoint, payload, apiKey, signal, timeoutMs }) {
     try {
       response = await fetch(url, {
         method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${credential}`,
+        },
         body: JSON.stringify(payload),
         signal: controller.signal,
         redirect: "error",
@@ -261,8 +268,8 @@ async function callSystemOne({ endpoint, payload, apiKey, signal, timeoutMs }) {
 
 export default definePluginEntry({
   id: PLUGIN_ID,
-  name: "Bailian Decisions",
-  description: "Aliyun Bailian (Model Studio) System One decision provider (decision-model-preview).",
+  name: "Typed Decisions",
+  description: "System One typed decision provider (choice / score / boolean) for the decisionModel role.",
   register(api) {
     const config = normalizeConfig(api.pluginConfig);
     const keyCache = { path: undefined, value: undefined, mtimeMs: 0, checkedAt: 0 };
@@ -296,16 +303,17 @@ export default definePluginEntry({
     async function preparedSecret() {
       try {
         const mod = await import("openclaw/plugin-sdk/secret-input-runtime");
-        const value = mod?.getPreparedPluginSecretInput?.(PLUGIN_ID, "apiKey")?.value;
+        const value = mod?.getPreparedPluginSecretInput?.(PLUGIN_ID, "credential")?.value;
         return typeof value === "string" && value.trim() ? value.trim() : undefined;
       } catch {
         return undefined;
       }
     }
 
-    async function resolveApiKey() {
-      if (typeof config.apiKey === "string" && config.apiKey.trim()) return config.apiKey.trim();
-      if (config.apiKey && typeof config.apiKey === "object") {
+    async function resolveCredential() {
+      const configured = config.credential;
+      if (typeof configured === "string" && configured.trim()) return configured.trim();
+      if (configured && typeof configured === "object") {
         const value = await preparedSecret();
         if (value) return value;
       }
@@ -314,8 +322,9 @@ export default definePluginEntry({
 
     async function evaluate(batch, context) {
       try {
-        const apiKey = await resolveApiKey();
-        if (!apiKey) return { status: "unavailable", reason: "credentials-unavailable" };
+        if (!config.endpoint) return { status: "unavailable", reason: "credentials-unavailable" };
+        const credential = await resolveCredential();
+        if (!credential) return { status: "unavailable", reason: "credentials-unavailable" };
         const model = modelName(context);
         const built = buildRequest(model, batch);
         if (built.error) return { status: "unavailable", reason: built.error };
@@ -327,7 +336,7 @@ export default definePluginEntry({
         const raw = await callSystemOne({
           endpoint: config.endpoint,
           payload: built.payload,
-          apiKey,
+          credential,
           signal: context?.signal,
           timeoutMs,
         });
@@ -357,23 +366,22 @@ export default definePluginEntry({
     api.registerDecisionProvider({
       id: PROVIDER_ID,
       contractVersion: 1,
-      // Credential availability is checked on every call; reporting ready here
-      // keeps the provider self-healing when the key file is created later.
-      isReady: () => true,
+      // Credential availability is checked on every call; reporting ready when an
+      // endpoint is configured keeps the provider self-healing when the key file
+      // is created later.
+      isReady: () => Boolean(config.endpoint),
       evaluate,
     });
 
-    // Optional explicit-evaluation tool (same pattern as the official TypeSafe
-    // adapter). Off unless the operator allowlists it.
+    // Optional explicit-evaluation tool. Off unless the operator allowlists it.
     api.registerTool(
       {
-        name: "bailian_decide",
-        label: "Bailian Decision",
+        name: "typed_decide",
+        label: "Typed Decision",
         description:
-          "Evaluate evidence against a rubric with the configured Bailian decision model " +
-          "(decision-model-preview). Returns typed choice / score / boolean judgments with " +
-          "probability distributions and confidence. Use for routing, urgency scoring, or " +
-          "predicate checks.",
+          "Evaluate evidence against a rubric with the configured decision model. Returns typed " +
+          "choice / score / boolean judgments with probability distributions and confidence. Use " +
+          "for routing, urgency scoring, or predicate checks.",
         parameters: {
           type: "object",
           additionalProperties: false,
@@ -398,7 +406,7 @@ export default definePluginEntry({
             questions: params?.questions && typeof params.questions === "object" ? params.questions : {},
           };
           const outcome = await api.runtime.decisions.evaluate(batch, {
-            purpose: "bailian-decisions.tool",
+            purpose: "typed-decisions.tool",
             rubricVersion: "1",
             timeoutMs: config.timeoutMs,
             signal: new AbortController().signal,
@@ -409,7 +417,7 @@ export default definePluginEntry({
           };
         },
       },
-      { name: "bailian_decide", optional: true },
+      { name: "typed_decide", optional: true },
     );
   },
 });

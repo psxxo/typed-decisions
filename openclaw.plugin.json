@@ -1,8 +1,8 @@
 {
-  "id": "bailian-decisions",
-  "name": "Bailian Decisions",
+  "id": "typed-decisions",
+  "name": "Typed Decisions",
   "version": "1.0.0",
-  "description": "Aliyun Bailian (Model Studio) System One decision provider: typed choice / score / boolean judgments through decision-model-preview.",
+  "description": "System One typed decision provider: choice / score / boolean judgments with probability distributions for OpenClaw's decisionModel role.",
   "categories": [
     "other"
   ],
@@ -11,29 +11,29 @@
   },
   "contracts": {
     "decisionProviders": [
-      "bailian-decisions"
+      "typed-decisions"
     ],
     "tools": [
-      "bailian_decide"
+      "typed_decide"
     ]
   },
   "toolMetadata": {
-    "bailian_decide": {
+    "typed_decide": {
       "optional": true
     }
   },
   "decisionModels": [
     {
-      "provider": "bailian-decisions",
+      "provider": "typed-decisions",
       "id": "decision-model-preview",
-      "name": "Bailian 决策模型 (preview)"
+      "name": "Typed Decisions (preview)"
     }
   ],
   "configContracts": {
     "secretInputs": {
       "paths": [
         {
-          "path": "apiKey",
+          "path": "credential",
           "expected": "string",
           "ownerKind": "capability"
         }
@@ -44,17 +44,17 @@
     "type": "object",
     "additionalProperties": false,
     "properties": {
-      "keyFile": {
-        "type": "string",
-        "description": "Path to a file holding the Bailian API key (0600). Defaults to ~/.openclaw/.secrets/dashscope-decision.key."
-      },
-      "apiKey": {
-        "type": "string",
-        "description": "Inline Bailian API key. Prefer keyFile; this value lives in config and is stored in plaintext unless supplied as a SecretRef."
-      },
       "endpoint": {
         "type": "string",
-        "description": "System One endpoint host. Default trial.cn-beijing.maas.aliyuncs.com; use <WorkspaceId>.cn-beijing.maas.aliyuncs.com for production."
+        "description": "System One endpoint host (required to serve decisions). Accepts a bare host or an origin URL; the plugin appends /compatible-mode/v1/systemone."
+      },
+      "keyFile": {
+        "type": "string",
+        "description": "Path to a file holding the provider credential (0600). Defaults to ~/.openclaw/.secrets/decision-model.key."
+      },
+      "credential": {
+        "type": "string",
+        "description": "Inline provider credential. Prefer keyFile; this value lives in config and is stored in plaintext unless supplied as a SecretRef."
       },
       "timeoutMs": {
         "type": "number",
