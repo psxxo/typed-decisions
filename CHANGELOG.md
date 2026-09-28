@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.5.0
+
+- Follow the toolbar continuously instead of only on window resize. A low-frequency
+  poll (250 ms) keeps the switch locked to the composer row, and any layout signal
+  — window resize, viewport resize/scroll, fullscreenchange, or an observed element
+  resize — switches to a short per-frame burst (800 ms), so the switch never drifts
+  while the page is being resized and stays put relative to the toolbar when the
+  chat pane moves horizontally.
+- Observe the geometry actually used (the composer box and the admission control)
+  instead of `document.documentElement` alone, and write styles only when the
+  computed target changed, so continuous syncing causes no layout churn.
+
+## 1.4.1
+
+- Fix the session read: the plugin read its extension from `api.runtime.sessions`,
+  which does not exist — the plugin runtime exposes session access as
+  `api.runtime.agent.session`. The old `typeof read !== "function" -> return false`
+  guard turned that into a permanent "off": `sessions.pluginPatch` writes
+  succeeded, but the Control UI read action and the `agent_turn_prepare` hook never
+  saw them, so the switch could never take effect. Read via `agent.session` (old
+  path kept as fallback) and log a warning instead of hiding the failure.
+
 ## 1.4.0
 
 - Anchor the switch to the composer toolbar row instead of a bottom offset.

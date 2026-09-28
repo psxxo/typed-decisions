@@ -130,9 +130,15 @@ function findPlacement(button, offset, cached) {
     }
   }
   if (admission) {
-    return { left: Math.round(admission.getBoundingClientRect().right + DEFAULT_GAP), top, label: "after-admission" };
+    return {
+      left: Math.round(admission.getBoundingClientRect().right + DEFAULT_GAP),
+      top,
+      label: "after-admission",
+      box: node,
+      anchor: admission
+    };
   }
-  return { left: Math.round(box.left + offset.x), top, label: "composer-offset" };
+  return { left: Math.round(box.left + offset.x), top, label: "composer-offset", box: node, anchor: null };
 }
 var control_ui_default = defineControlUiPlugin({
   id: PLUGIN_ID,
@@ -175,6 +181,9 @@ var control_ui_default = defineControlUiPlugin({
         button.append(track, label);
         root.append(style, button);
         const admissionCache = { admission: null, at: 0 };
+        const applied = { left: Number.NaN, top: Number.NaN };
+        let observedBox = null;
+        let observedAnchor = null;
         const place = () => {
           if (disposed) return;
           if (!presented) {
@@ -184,6 +193,8 @@ var control_ui_default = defineControlUiPlugin({
           container.style.display = "";
           const target = findPlacement(button, state.placement.offset, admissionCache);
           if (!target) {
+            applied.left = Number.NaN;
+            applied.top = Number.NaN;
             state.placement = {
               anchored: false,
               offset: { ...state.placement.offset },
@@ -197,10 +208,16 @@ var control_ui_default = defineControlUiPlugin({
             container.style.zIndex = "";
             return;
           }
-          container.style.position = "fixed";
-          container.style.left = `${target.left}px`;
-          container.style.top = `${target.top}px`;
-          container.style.zIndex = String(Z_INDEX);
+          if (target.box !== observedBox) {
+            if (observedBox) observer?.unobserve(observedBox);
+            observedBox = target.box;
+            observer?.observe(target.box);
+          }
+          if (target.anchor !== observedAnchor) {
+            if (observedAnchor) observer?.unobserve(observedAnchor);
+            observedAnchor = target.anchor;
+            if (target.anchor) observer?.observe(target.anchor);
+          }
           state.placement = {
             anchored: true,
             offset: { ...state.placement.offset },
@@ -208,13 +225,31 @@ var control_ui_default = defineControlUiPlugin({
             top: target.top,
             anchor: target.label
           };
+          if (applied.left === target.left && applied.top === target.top && container.style.position === "fixed") {
+            return;
+          }
+          applied.left = target.left;
+          applied.top = target.top;
+          container.style.position = "fixed";
+          container.style.left = `${target.left}px`;
+          container.style.top = `${target.top}px`;
+          container.style.zIndex = String(Z_INDEX);
         };
-        const schedule = () => {
-          if (disposed || frame) return;
-          frame = requestAnimationFrame(() => {
-            frame = 0;
+        const POLL_MS = 250;
+        const BURST_MS = 800;
+        let lastSync = 0;
+        let burstUntil = 0;
+        const follow = () => {
+          burstUntil = Date.now() + BURST_MS;
+        };
+        const loop = () => {
+          if (disposed) return;
+          frame = requestAnimationFrame(loop);
+          const now = Date.now();
+          if (now < burstUntil || now - lastSync >= POLL_MS) {
+            lastSync = now;
             place();
-          });
+          }
         };
         const render = () => {
           button.setAttribute("aria-checked", checked ? "true" : "false");
@@ -228,7 +263,7 @@ var control_ui_default = defineControlUiPlugin({
           state.pending = pending;
           state.updatedAt = Date.now();
           probe.add(button);
-          schedule();
+          follow();
         };
         const hitTest = () => {
           const rect = button.getBoundingClientRect();
@@ -263,7 +298,10 @@ var control_ui_default = defineControlUiPlugin({
           probeTimer = setInterval(tick, PROBE_INTERVAL_MS);
           requestAnimationFrame(tick);
         };
-        const reposition = () => schedule();
+        const reposition = () => {
+          place();
+          follow();
+        };
         const readState = async () => {
           if (!sessionKey) return;
           for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -322,13 +360,18 @@ var control_ui_default = defineControlUiPlugin({
           void writeState(!checked);
         });
         button.addEventListener("td:reposition", reposition);
-        window.addEventListener("resize", reposition);
-        window.addEventListener("scroll", reposition, { passive: true, capture: true });
-        const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(reposition) : void 0;
+        const onLayout = () => follow();
+        window.addEventListener("resize", onLayout);
+        window.addEventListener("scroll", onLayout, { passive: true, capture: true });
+        document.addEventListener("fullscreenchange", onLayout);
+        window.visualViewport?.addEventListener("resize", onLayout);
+        window.visualViewport?.addEventListener("scroll", onLayout);
+        const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => follow()) : void 0;
         observer?.observe(document.documentElement);
         render();
         startProbe();
         void readState();
+        frame = requestAnimationFrame(loop);
         return {
           update(next) {
             const nextProps = next.props ?? {};
@@ -344,7 +387,7 @@ var control_ui_default = defineControlUiPlugin({
               render();
               void readState();
             } else {
-              schedule();
+              follow();
             }
             if (next.presented) startProbe();
           },
@@ -356,8 +399,11 @@ var control_ui_default = defineControlUiPlugin({
             if (probeTimer) clearInterval(probeTimer);
             if (frame) cancelAnimationFrame(frame);
             observer?.disconnect();
-            window.removeEventListener("resize", reposition);
-            window.removeEventListener("scroll", reposition, { capture: true });
+            window.removeEventListener("resize", onLayout);
+            window.removeEventListener("scroll", onLayout, { capture: true });
+            document.removeEventListener("fullscreenchange", onLayout);
+            window.visualViewport?.removeEventListener("resize", onLayout);
+            window.visualViewport?.removeEventListener("scroll", onLayout);
             probe.drop(button);
             state.mounted = probe.elements().length > 0;
             button.remove();

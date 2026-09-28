@@ -1,7 +1,7 @@
 {
   "id": "typed-decisions",
   "name": "Typed Decisions",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "description": "System One typed decision provider: choice / score / boolean judgments with probability distributions for OpenClaw's decisionModel role.",
   "categories": [
     "other"
@@ -63,6 +63,6 @@
     }
   },
   "controlUi": {
-    "entry": "dist/control-ui/0a82f78a3978/index.js"
+    "entry": "dist/control-ui/7d5a2cacd7d5/index.js"
   }
 }

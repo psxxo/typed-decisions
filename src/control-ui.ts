@@ -155,7 +155,7 @@ function findPlacement(
   button: HTMLElement,
   offset: Offset,
   cached: { admission: Element | null; at: number },
-): { left: number; top: number; label: string } | null {
+): { left: number; top: number; label: string; box: HTMLElement; anchor: Element | null } | null {
   const areas = Array.from(document.querySelectorAll("textarea")).filter((element) => {
     const rect = element.getBoundingClientRect();
     return rect.width > 120 && rect.height > 0 && element.offsetParent !== null;
@@ -209,9 +209,15 @@ function findPlacement(
   }
 
   if (admission) {
-    return { left: Math.round(admission.getBoundingClientRect().right + DEFAULT_GAP), top, label: "after-admission" };
+    return {
+      left: Math.round(admission.getBoundingClientRect().right + DEFAULT_GAP),
+      top,
+      label: "after-admission",
+      box: node,
+      anchor: admission,
+    };
   }
-  return { left: Math.round(box.left + offset.x), top, label: "composer-offset" };
+  return { left: Math.round(box.left + offset.x), top, label: "composer-offset", box: node, anchor: null };
 }
 
 export default defineControlUiPlugin({
@@ -263,8 +269,14 @@ export default defineControlUiPlugin({
         root.append(style, button);
 
         // Places the control in the composer toolbar row; falls back to the
-        // session header when no composer is on screen.
+        // session header when no composer is on screen. The control is re-synced
+        // continuously (see the follow loop) and only writes styles when the
+        // target actually moved, so the switch stays static relative to the
+        // toolbar through window resizes, fullscreen, and pane reflows.
         const admissionCache: { admission: Element | null; at: number } = { admission: null, at: 0 };
+        const applied = { left: Number.NaN, top: Number.NaN };
+        let observedBox: HTMLElement | null = null;
+        let observedAnchor: Element | null = null;
         const place = () => {
           if (disposed) return;
           if (!presented) {
@@ -274,6 +286,8 @@ export default defineControlUiPlugin({
           container.style.display = "";
           const target = findPlacement(button, state.placement.offset, admissionCache);
           if (!target) {
+            applied.left = Number.NaN;
+            applied.top = Number.NaN;
             state.placement = {
               anchored: false,
               offset: { ...state.placement.offset },
@@ -287,10 +301,21 @@ export default defineControlUiPlugin({
             container.style.zIndex = "";
             return;
           }
-          container.style.position = "fixed";
-          container.style.left = `${target.left}px`;
-          container.style.top = `${target.top}px`;
-          container.style.zIndex = String(Z_INDEX);
+
+          // Watch the geometry we actually depend on: the composer box and the
+          // admission control. A pane move that leaves their size unchanged is
+          // caught by the follow loop's poll instead.
+          if (target.box !== observedBox) {
+            if (observedBox) observer?.unobserve(observedBox);
+            observedBox = target.box;
+            observer?.observe(target.box);
+          }
+          if (target.anchor !== observedAnchor) {
+            if (observedAnchor) observer?.unobserve(observedAnchor);
+            observedAnchor = target.anchor;
+            if (target.anchor) observer?.observe(target.anchor);
+          }
+
           state.placement = {
             anchored: true,
             offset: { ...state.placement.offset },
@@ -298,14 +323,37 @@ export default defineControlUiPlugin({
             top: target.top,
             anchor: target.label,
           };
+          if (applied.left === target.left && applied.top === target.top && container.style.position === "fixed") {
+            return;
+          }
+          applied.left = target.left;
+          applied.top = target.top;
+          container.style.position = "fixed";
+          container.style.left = `${target.left}px`;
+          container.style.top = `${target.top}px`;
+          container.style.zIndex = String(Z_INDEX);
         };
 
-        const schedule = () => {
-          if (disposed || frame) return;
-          frame = requestAnimationFrame(() => {
-            frame = 0;
+        // Continuous alignment: a low-frequency poll keeps the control locked to
+        // the toolbar, and any layout signal (window/viewport resize, scroll,
+        // fullscreen, observed element resize) switches to a short per-frame
+        // burst so it never drifts while the page is being resized or the pane
+        // is moving.
+        const POLL_MS = 250;
+        const BURST_MS = 800;
+        let lastSync = 0;
+        let burstUntil = 0;
+        const follow = () => {
+          burstUntil = Date.now() + BURST_MS;
+        };
+        const loop = () => {
+          if (disposed) return;
+          frame = requestAnimationFrame(loop);
+          const now = Date.now();
+          if (now < burstUntil || now - lastSync >= POLL_MS) {
+            lastSync = now;
             place();
-          });
+          }
         };
 
         const render = () => {
@@ -322,7 +370,7 @@ export default defineControlUiPlugin({
           state.pending = pending;
           state.updatedAt = Date.now();
           probe.add(button);
-          schedule();
+          follow();
         };
 
         const hitTest = () => {
@@ -361,7 +409,10 @@ export default defineControlUiPlugin({
           requestAnimationFrame(tick);
         };
 
-        const reposition = () => schedule();
+        const reposition = () => {
+          place();
+          follow();
+        };
 
         const readState = async () => {
           if (!sessionKey) return;
@@ -430,15 +481,20 @@ export default defineControlUiPlugin({
           void writeState(!checked);
         });
         button.addEventListener("td:reposition", reposition);
-        window.addEventListener("resize", reposition);
-        window.addEventListener("scroll", reposition, { passive: true, capture: true });
+        const onLayout = () => follow();
+        window.addEventListener("resize", onLayout);
+        window.addEventListener("scroll", onLayout, { passive: true, capture: true });
+        document.addEventListener("fullscreenchange", onLayout);
+        window.visualViewport?.addEventListener("resize", onLayout);
+        window.visualViewport?.addEventListener("scroll", onLayout);
         const observer =
-          typeof ResizeObserver !== "undefined" ? new ResizeObserver(reposition) : undefined;
+          typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => follow()) : undefined;
         observer?.observe(document.documentElement);
 
         render();
         startProbe();
         void readState();
+        frame = requestAnimationFrame(loop);
 
         return {
           update(next) {
@@ -458,7 +514,7 @@ export default defineControlUiPlugin({
               render();
               void readState();
             } else {
-              schedule();
+              follow();
             }
             if (next.presented) startProbe();
           },
@@ -470,8 +526,11 @@ export default defineControlUiPlugin({
             if (probeTimer) clearInterval(probeTimer);
             if (frame) cancelAnimationFrame(frame);
             observer?.disconnect();
-            window.removeEventListener("resize", reposition);
-            window.removeEventListener("scroll", reposition, { capture: true } as EventListenerOptions);
+            window.removeEventListener("resize", onLayout);
+            window.removeEventListener("scroll", onLayout, { capture: true } as EventListenerOptions);
+            document.removeEventListener("fullscreenchange", onLayout);
+            window.visualViewport?.removeEventListener("resize", onLayout);
+            window.visualViewport?.removeEventListener("scroll", onLayout);
             probe.drop(button);
             state.mounted = probe.elements().length > 0;
             button.remove();
