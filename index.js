@@ -283,17 +283,31 @@ async function callSystemOne({ endpoint, payload, credential, signal, timeoutMs 
 /** Reads this plugin's session extension for one session; false when absent. */
 async function readIntervention(api, agentId, sessionKey) {
   if (typeof sessionKey !== "string" || !sessionKey) return false;
-  const store = api?.runtime?.sessions;
-  const read = store?.getSessionEntry;
-  if (typeof read !== "function") return false;
+  // The plugin runtime exposes session access under `agent.session`; the
+  // previously used `runtime.sessions` does not exist, and the old silent
+  // `typeof read !== "function"` guard turned that into "off" forever — a
+  // successful sessions.pluginPatch write was never observed by the hook or the
+  // Control UI read action.
+  const session = api?.runtime?.agent?.session ?? api?.runtime?.sessions;
+  const read = session?.getSessionEntry;
+  if (typeof read !== "function") {
+    api?.logger?.warn?.(
+      `[${PLUGIN_ID}] session entry read unavailable: api.runtime.agent.session.getSessionEntry is not exposed`,
+    );
+    return false;
+  }
   try {
-    const entry = await read.call(store, {
+    const entry = await read.call(session, {
       ...(typeof agentId === "string" && agentId ? { agentId } : {}),
       sessionKey,
     });
     const value = entry?.pluginExtensions?.[PLUGIN_ID]?.[EXTENSION_NAMESPACE];
     return value?.enabled === true;
-  } catch {
+  } catch (error) {
+    // Never let a read failure masquerade as "off".
+    api?.logger?.warn?.(
+      `[${PLUGIN_ID}] reading decision-intervention state failed: ${error?.message ?? error}`,
+    );
     return false;
   }
 }
