@@ -37,6 +37,8 @@ var STYLE = `
 .td-switch[data-state="error"] { border-color: #d9534f; }
 `;
 function registry() {
+  const existing = window.__openclawTypedDecisions;
+  if (existing) return existing;
   const state = {
     mounted: false,
     sessionKey: null,
@@ -48,14 +50,19 @@ function registry() {
     writes: 0,
     updatedAt: null
   };
-  const elements2 = [];
-  const existing = window.__openclawTypedDecisions;
-  if (existing) return existing;
+  const elements = [];
   const entry = {
+    state,
     probe: () => ({ ...state, hitTest: { ...state.hitTest } }),
-    elements: () => [...elements2]
+    elements: () => [...elements],
+    add: (element) => {
+      if (elements.indexOf(element) < 0) elements.push(element);
+    },
+    drop: (element) => {
+      const index = elements.indexOf(element);
+      if (index >= 0) elements.splice(index, 1);
+    }
   };
-  Object.assign(entry, { state, elements: elements2 });
   window.__openclawTypedDecisions = entry;
   return entry;
 }
@@ -115,7 +122,7 @@ var control_ui_default = defineControlUiPlugin({
           state.checked = checked;
           state.pending = pending;
           state.updatedAt = Date.now();
-          if (elements.indexOf(button) < 0) elements.push(button);
+          probe.add(button);
         };
         const hitTest = () => {
           const rect = button.getBoundingClientRect();
@@ -225,9 +232,8 @@ var control_ui_default = defineControlUiPlugin({
           dispose() {
             disposed = true;
             if (probeTimer) clearInterval(probeTimer);
-            const index = elements.indexOf(button);
-            if (index >= 0) elements.splice(index, 1);
-            state.mounted = elements.length > 0;
+            probe.drop(button);
+            state.mounted = probe.elements().length > 0;
             button.remove();
           }
         };

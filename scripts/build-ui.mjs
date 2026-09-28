@@ -10,7 +10,7 @@
 import { build } from "esbuild";
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync } from "node:fs";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readlink, rm, symlink, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -32,6 +32,7 @@ if (sdkDir) {
   for (const name of readdirSync(sdkDir)) {
     if (name.endsWith(".js")) alias[`openclaw/plugin-sdk/${name.slice(0, -3)}`] = join(sdkDir, name);
   }
+  await ensureHostLink(sdkDir);
 }
 
 const result = await build({
@@ -94,6 +95,21 @@ async function exists(path) {
   } catch {
     return false;
   }
+}
+
+// TypeScript resolves `openclaw/plugin-sdk/*` through the tsconfig paths mapping
+// into node_modules/openclaw, so keep that peer link present in the checkout.
+async function ensureHostLink(dir) {
+  const hostRoot = dirname(dirname(dir));
+  const link = join(rootDir, "node_modules", "openclaw");
+  try {
+    if ((await readlink(link)) === hostRoot) return;
+  } catch {
+    // no link yet (or not a symlink); create it below
+  }
+  if (existsSync(link)) return;
+  await mkdir(dirname(link), { recursive: true });
+  await symlink(hostRoot, link, "dir");
 }
 
 function resolveSdkDir() {

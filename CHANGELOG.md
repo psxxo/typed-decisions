@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.1.2
+
+- Fix a scope bug in the browser entry: the probe's element list was declared
+  inside `registry()` while `mount()`/`render()` referenced it directly, so the
+  accessory threw `ReferenceError: elements is not defined` at mount time and
+  the Control UI showed "retry plugin view". The registry now owns `add`/`drop`
+  operations and exposes its state.
+- Type-check the browser source (`tsc --noEmit`, `npm run typecheck`) as part of
+  `npm run build`, so this class of error fails the build instead of the page.
+
+## 1.1.1
+
+- Bundle the host SDK into the browser entry instead of emitting a bare
+  `openclaw/plugin-sdk/control-ui` import. This host serves user-installed
+  plugin UI without an import map, so the bare import failed module resolution
+  and the plugin never activated (`status: failed`, "Failed to resolve module
+  specifier") — matching the bundled Workboard asset, which ships no imports.
+- Drop the non-contract `label` field from `registerAccessory`.
+
 ## 1.1.0
 
 - Adds a native Control UI accessory: the **「决策介入」** switch in the chat

@@ -33,8 +33,11 @@ type Probe = {
 };
 
 type ProbeRegistry = {
+  readonly state: Probe;
   probe: () => Probe;
   elements: () => HTMLElement[];
+  add: (element: HTMLElement) => void;
+  drop: (element: HTMLElement) => void;
 };
 
 declare global {
@@ -71,6 +74,8 @@ const STYLE = `
 `;
 
 function registry(): ProbeRegistry {
+  const existing = window.__openclawTypedDecisions;
+  if (existing) return existing;
   const state: Probe = {
     mounted: false,
     sessionKey: null,
@@ -83,13 +88,18 @@ function registry(): ProbeRegistry {
     updatedAt: null,
   };
   const elements: HTMLElement[] = [];
-  const existing = window.__openclawTypedDecisions;
-  if (existing) return existing;
   const entry: ProbeRegistry = {
+    state,
     probe: () => ({ ...state, hitTest: { ...state.hitTest } }),
     elements: () => [...elements],
+    add: (element) => {
+      if (elements.indexOf(element) < 0) elements.push(element);
+    },
+    drop: (element) => {
+      const index = elements.indexOf(element);
+      if (index >= 0) elements.splice(index, 1);
+    },
   };
-  Object.assign(entry, { state, elements });
   window.__openclawTypedDecisions = entry;
   return entry;
 }
@@ -109,7 +119,7 @@ export default defineControlUiPlugin({
   id: PLUGIN_ID,
   activate(host: ControlUiHost) {
     const probe = registry();
-    const state = (probe as unknown as { state: Probe }).state;
+    const state = probe.state;
 
     host.ui.registerAccessory({
       id: "decision-intervention",
@@ -164,7 +174,7 @@ export default defineControlUiPlugin({
           state.checked = checked;
           state.pending = pending;
           state.updatedAt = Date.now();
-          if (elements.indexOf(button) < 0) elements.push(button);
+          probe.add(button);
         };
 
         const hitTest = () => {
@@ -290,9 +300,8 @@ export default defineControlUiPlugin({
           dispose() {
             disposed = true;
             if (probeTimer) clearInterval(probeTimer);
-            const index = elements.indexOf(button);
-            if (index >= 0) elements.splice(index, 1);
-            state.mounted = elements.length > 0;
+            probe.drop(button);
+            state.mounted = probe.elements().length > 0;
             button.remove();
           },
         };
