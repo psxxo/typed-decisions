@@ -12,6 +12,8 @@ var Z_INDEX = 2147483e3;
 var PROBE_INTERVAL_MS = 3e3;
 var PROBE_WINDOW_MS = 6e4;
 var DEFAULT_OFFSET = { x: 61, y: 24 };
+var DEFAULT_GAP = 16;
+var ADMISSION_LABEL = /完全访问|只读|保护|工作区|Full access|Read-only|Guarded|Workspace/;
 var STYLE = `
 :host { display: inline-flex; align-items: center; }
 .td-switch {
@@ -85,26 +87,52 @@ function describe(element) {
   const cls = typeof element.className === "string" && element.className ? `.${element.className.trim().split(/\s+/).slice(0, 2).join(".")}` : "";
   return `${tag}${id}${cls}`;
 }
-function findComposer(anchor) {
+function findPlacement(button, offset, cached) {
   const areas = Array.from(document.querySelectorAll("textarea")).filter((element) => {
     const rect = element.getBoundingClientRect();
     return rect.width > 120 && rect.height > 0 && element.offsetParent !== null;
   });
   if (areas.length === 0) return null;
-  areas.sort((a, b) => a.getBoundingClientRect().width - b.getBoundingClientRect().width);
-  const textarea = areas[areas.length - 1];
-  const own = textarea.getBoundingClientRect();
+  areas.sort((a, b) => b.getBoundingClientRect().width - a.getBoundingClientRect().width);
+  const textarea = areas[0];
+  let box = textarea.getBoundingClientRect();
   let node = textarea;
-  let best = own;
-  for (let depth = 0; depth < 6 && node.parentElement; depth += 1) {
+  const limit = Math.min(window.innerHeight * 0.5, 480);
+  for (let depth = 0; depth < 8 && node.parentElement; depth += 1) {
     const parent = node.parentElement;
     const rect = parent.getBoundingClientRect();
-    if (rect.width + 1 < best.width) break;
-    if (rect.height <= best.height) break;
-    best = rect;
+    if (rect.width + 4 < box.width) break;
+    if (rect.height > limit) break;
+    box = rect;
     node = parent;
   }
-  return { rect: best, label: describe(anchor ?? node) };
+  const isVisible = (element) => {
+    const rect = element.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  };
+  const buttons = Array.from(node.querySelectorAll("button")).filter(isVisible);
+  const trailing = buttons[buttons.length - 1];
+  const trailingRect = trailing?.getBoundingClientRect();
+  const own = button.getBoundingClientRect();
+  const top = trailingRect && trailingRect.height > 0 ? Math.round(trailingRect.top + (trailingRect.height - own.height) / 2) : Math.round(box.bottom - offset.y - own.height);
+  let admission = cached.admission;
+  if (!admission || !admission.isConnected || !isVisible(admission)) {
+    admission = null;
+    if (Date.now() - cached.at > 2e3) {
+      cached.at = Date.now();
+      const candidates = Array.from(node.querySelectorAll("button, span, div")).filter((element) => {
+        const text = (element.textContent ?? "").trim();
+        return text.length > 0 && ADMISSION_LABEL.test(text) && isVisible(element);
+      });
+      candidates.sort((a, b) => a.getBoundingClientRect().width - b.getBoundingClientRect().width);
+      admission = candidates[0] ?? null;
+      cached.admission = admission;
+    }
+  }
+  if (admission) {
+    return { left: Math.round(admission.getBoundingClientRect().right + DEFAULT_GAP), top, label: "after-admission" };
+  }
+  return { left: Math.round(box.left + offset.x), top, label: "composer-offset" };
 }
 var control_ui_default = defineControlUiPlugin({
   id: PLUGIN_ID,
@@ -146,6 +174,7 @@ var control_ui_default = defineControlUiPlugin({
         label.textContent = LABEL;
         button.append(track, label);
         root.append(style, button);
+        const admissionCache = { admission: null, at: 0 };
         const place = () => {
           if (disposed) return;
           if (!presented) {
@@ -153,8 +182,8 @@ var control_ui_default = defineControlUiPlugin({
             return;
           }
           container.style.display = "";
-          const found = findComposer(container);
-          if (!found) {
+          const target = findPlacement(button, state.placement.offset, admissionCache);
+          if (!target) {
             state.placement = {
               anchored: false,
               offset: { ...state.placement.offset },
@@ -168,19 +197,16 @@ var control_ui_default = defineControlUiPlugin({
             container.style.zIndex = "";
             return;
           }
-          const { rect, label: anchorLabel } = found;
-          const left = Math.round(rect.left + state.placement.offset.x);
-          const top = Math.round(rect.bottom - state.placement.offset.y);
           container.style.position = "fixed";
-          container.style.left = `${left}px`;
-          container.style.top = `${top}px`;
+          container.style.left = `${target.left}px`;
+          container.style.top = `${target.top}px`;
           container.style.zIndex = String(Z_INDEX);
           state.placement = {
             anchored: true,
             offset: { ...state.placement.offset },
-            left,
-            top,
-            anchor: anchorLabel
+            left: target.left,
+            top: target.top,
+            anchor: target.label
           };
         };
         const schedule = () => {

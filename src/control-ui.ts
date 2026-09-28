@@ -30,6 +30,10 @@ const PROBE_WINDOW_MS = 60_000;
 
 /** Distance from the composer box's left/bottom edges to the switch. */
 const DEFAULT_OFFSET = { x: 61, y: 24 };
+/** Gap between the admission control's right edge and the switch. */
+const DEFAULT_GAP = 16;
+/** Admission-control labels (the row control the switch sits after). */
+const ADMISSION_LABEL = /完全访问|只读|保护|工作区|Full access|Read-only|Guarded|Workspace/;
 
 type Offset = { x: number; y: number };
 
@@ -147,32 +151,67 @@ function describe(element: Element | null): string | null {
   return `${tag}${id}${cls}`;
 }
 
-/**
- * Locate the composer box: the widest visible textarea's enclosing container.
- * Returns null outside a chat view (no composer on screen).
- */
-function findComposer(anchor: Element | null): { rect: DOMRect; label: string | null } | null {
+function findPlacement(
+  button: HTMLElement,
+  offset: Offset,
+  cached: { admission: Element | null; at: number },
+): { left: number; top: number; label: string } | null {
   const areas = Array.from(document.querySelectorAll("textarea")).filter((element) => {
     const rect = element.getBoundingClientRect();
     return rect.width > 120 && rect.height > 0 && element.offsetParent !== null;
   });
   if (areas.length === 0) return null;
-  areas.sort((a, b) => a.getBoundingClientRect().width - b.getBoundingClientRect().width);
-  const textarea = areas[areas.length - 1];
-  const own = textarea.getBoundingClientRect();
+  areas.sort((a, b) => b.getBoundingClientRect().width - a.getBoundingClientRect().width);
+  const textarea = areas[0];
+
+  let box = textarea.getBoundingClientRect();
   let node: HTMLElement = textarea;
-  let best = own;
-  // Climb while the ancestor still covers the textarea's width, to reach the
-  // container that also holds the toolbar row below the input.
-  for (let depth = 0; depth < 6 && node.parentElement; depth += 1) {
+  const limit = Math.min(window.innerHeight * 0.5, 480);
+  for (let depth = 0; depth < 8 && node.parentElement; depth += 1) {
     const parent = node.parentElement;
     const rect = parent.getBoundingClientRect();
-    if (rect.width + 1 < best.width) break;
-    if (rect.height <= best.height) break;
-    best = rect;
+    if (rect.width + 4 < box.width) break;
+    if (rect.height > limit) break;
+    box = rect;
     node = parent;
   }
-  return { rect: best, label: describe(anchor ?? node) };
+
+  const isVisible = (element: Element) => {
+    const rect = element.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  };
+
+  // Vertical: centre on the row's own trailing control (send/mic), which is a
+  // stable structural anchor regardless of how the box's height is composed.
+  const buttons = Array.from(node.querySelectorAll("button")).filter(isVisible);
+  const trailing = buttons[buttons.length - 1];
+  const trailingRect = trailing?.getBoundingClientRect();
+  const own = button.getBoundingClientRect();
+  const top = trailingRect && trailingRect.height > 0
+    ? Math.round(trailingRect.top + (trailingRect.height - own.height) / 2)
+    : Math.round(box.bottom - offset.y - own.height);
+
+  // Horizontal: after the admission control when we can find it, else a plain
+  // offset from the composer box's left edge. The lookup is cached briefly.
+  let admission = cached.admission;
+  if (!admission || !admission.isConnected || !isVisible(admission)) {
+    admission = null;
+    if (Date.now() - cached.at > 2000) {
+      cached.at = Date.now();
+      const candidates = Array.from(node.querySelectorAll("button, span, div")).filter((element) => {
+        const text = (element.textContent ?? "").trim();
+        return text.length > 0 && ADMISSION_LABEL.test(text) && isVisible(element);
+      });
+      candidates.sort((a, b) => a.getBoundingClientRect().width - b.getBoundingClientRect().width);
+      admission = candidates[0] ?? null;
+      cached.admission = admission;
+    }
+  }
+
+  if (admission) {
+    return { left: Math.round(admission.getBoundingClientRect().right + DEFAULT_GAP), top, label: "after-admission" };
+  }
+  return { left: Math.round(box.left + offset.x), top, label: "composer-offset" };
 }
 
 export default defineControlUiPlugin({
@@ -223,8 +262,9 @@ export default defineControlUiPlugin({
         button.append(track, label);
         root.append(style, button);
 
-        // Offsets the control into the composer row; falls back to the session
-        // header when no composer is on screen.
+        // Places the control in the composer toolbar row; falls back to the
+        // session header when no composer is on screen.
+        const admissionCache: { admission: Element | null; at: number } = { admission: null, at: 0 };
         const place = () => {
           if (disposed) return;
           if (!presented) {
@@ -232,8 +272,8 @@ export default defineControlUiPlugin({
             return;
           }
           container.style.display = "";
-          const found = findComposer(container);
-          if (!found) {
+          const target = findPlacement(button, state.placement.offset, admissionCache);
+          if (!target) {
             state.placement = {
               anchored: false,
               offset: { ...state.placement.offset },
@@ -247,19 +287,16 @@ export default defineControlUiPlugin({
             container.style.zIndex = "";
             return;
           }
-          const { rect, label: anchorLabel } = found;
-          const left = Math.round(rect.left + state.placement.offset.x);
-          const top = Math.round(rect.bottom - state.placement.offset.y);
           container.style.position = "fixed";
-          container.style.left = `${left}px`;
-          container.style.top = `${top}px`;
+          container.style.left = `${target.left}px`;
+          container.style.top = `${target.top}px`;
           container.style.zIndex = String(Z_INDEX);
           state.placement = {
             anchored: true,
             offset: { ...state.placement.offset },
-            left,
-            top,
-            anchor: anchorLabel,
+            left: target.left,
+            top: target.top,
+            anchor: target.label,
           };
         };
 

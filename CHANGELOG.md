@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.4.0
+
+- Anchor the switch to the composer toolbar row instead of a bottom offset.
+  Vertical placement is centred on the row's trailing control (the send/mic
+  button), which is stable however the composer box's height is composed — the
+  previous `bottom - dy` math landed the switch over the input placeholder.
+  Horizontal placement anchors after the admission control (matching
+  `完全访问|只读|保护|工作区|Full access|Read-only|Guarded|Workspace`, cached 2 s)
+  with a 16 px gap, so it sits between that control and the model picker; when
+  the control cannot be found it falls back to the numeric offset.
+- Probe `placement.anchor` now reports `after-admission` or `composer-offset` so
+  which path was taken is visible from the console.
+
 ## 1.3.3
 
 - Fix the state read: the plugin's `decision-intervention.state` action declares
