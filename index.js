@@ -20,6 +20,20 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { readFile, stat } from "node:fs/promises";
 
+// Per-session 「决策介入」 state. The Control UI accessory writes it through the
+// host's `sessions.pluginPatch` method; the prompt hook below reads it and
+// asks the agent to route judgments through the decision model.
+const EXTENSION_NAMESPACE = "decision-intervention";
+const SESSION_ACTION_ID = "decision-intervention.state";
+const EXTENSION_SLOT_KEY = "decisionIntervention";
+
+const INTERVENTION_GUIDANCE = [
+  "决策介入已开启（本会话）。",
+  "需要做判断时不要凭直觉下结论：用 `typed_decide` 工具把证据和评分/选项标准交给决策模型，",
+  "拿回带概率分布的 choice / score / boolean 结果后再继续。",
+  "典型场景：分类与路由、紧急度打分、条件判定（是否满足某条件）。",
+].join("");
+
 const PLUGIN_ID = "typed-decisions";
 const PROVIDER_ID = "typed-decisions";
 const DEFAULT_MODEL = "decision-model-preview";
@@ -266,6 +280,24 @@ async function callSystemOne({ endpoint, payload, credential, signal, timeoutMs 
   }
 }
 
+/** Reads this plugin's session extension for one session; false when absent. */
+async function readIntervention(api, agentId, sessionKey) {
+  if (typeof sessionKey !== "string" || !sessionKey) return false;
+  const store = api?.runtime?.sessions;
+  const read = store?.getSessionEntry;
+  if (typeof read !== "function") return false;
+  try {
+    const entry = await read.call(store, {
+      ...(typeof agentId === "string" && agentId ? { agentId } : {}),
+      sessionKey,
+    });
+    const value = entry?.pluginExtensions?.[PLUGIN_ID]?.[EXTENSION_NAMESPACE];
+    return value?.enabled === true;
+  } catch {
+    return false;
+  }
+}
+
 export default definePluginEntry({
   id: PLUGIN_ID,
   name: "Typed Decisions",
@@ -372,6 +404,60 @@ export default definePluginEntry({
       isReady: () => Boolean(config.endpoint),
       evaluate,
     });
+
+    // Session extension carrying the「决策介入」flag; the Control UI accessory
+    // renders it and the prompt hook consumes it. Registration is optional host
+    // surface, so a missing API must not take the decision provider down.
+    try {
+      api.session?.state?.registerSessionExtension?.({
+        namespace: EXTENSION_NAMESPACE,
+        description: "决策介入：本会话是否把判断交给决策模型。",
+        sessionEntrySlotKey: EXTENSION_SLOT_KEY,
+        sessionEntrySlotSchema: {
+          type: "object",
+          properties: { enabled: { type: "boolean" } },
+          required: ["enabled"],
+        },
+        project: (ctx) => (ctx?.state && typeof ctx.state === "object" ? ctx.state : undefined),
+      });
+    } catch (error) {
+      api.logger?.warn?.(`[${PLUGIN_ID}] session extension unavailable: ${error?.message ?? error}`);
+    }
+
+    // Read side for the Control UI accessory (the write side is the host's
+    // `sessions.pluginPatch`, which the accessory calls directly).
+    try {
+      api.session?.controls?.registerSessionAction?.({
+        id: SESSION_ACTION_ID,
+        description: "读取本会话的决策介入开关状态。",
+        schema: { type: "object", properties: {}, additionalProperties: false },
+        requiredScopes: ["operator.read"],
+        handler: async (ctx) => {
+          const sessionKey = typeof ctx?.sessionKey === "string" ? ctx.sessionKey : undefined;
+          if (!sessionKey) return { ok: false, error: "session-key-required" };
+          return { ok: true, result: { enabled: await readIntervention(api, ctx.agentId, sessionKey) } };
+        },
+      });
+    } catch (error) {
+      api.logger?.warn?.(`[${PLUGIN_ID}] session action unavailable: ${error?.message ?? error}`);
+    }
+
+    // Consumption side: when the session has 决策介入 on, tell the agent to route
+    // judgments through the decision model. Needs `hooks.allowConversationAccess`
+    // plus `hooks.allowPromptInjection` (default allowed); the host blocks the
+    // registration otherwise and decisions stay unaffected.
+    try {
+      api.on?.(
+        "agent_turn_prepare",
+        async (_event, ctx) => {
+          if (!(await readIntervention(api, ctx?.agentId, ctx?.sessionKey))) return;
+          return { appendContext: INTERVENTION_GUIDANCE };
+        },
+        { registrationId: "decision-intervention" },
+      );
+    } catch (error) {
+      api.logger?.warn?.(`[${PLUGIN_ID}] prompt hook unavailable: ${error?.message ?? error}`);
+    }
 
     // Optional explicit-evaluation tool. Off unless the operator allowlists it.
     api.registerTool(

@@ -54,6 +54,46 @@ Tool availability and the decision-model role are independent: allowlisting the
 tool does not select a background model, and selecting the role does not expose
 the tool.
 
+## 「决策介入」switch (native Control UI)
+
+The plugin ships a native Control UI accessory: a **决策介入** switch in the chat
+window's session header, with the switch control to the left of the label.
+Turning it on marks **that session** so the agent routes judgments through the
+decision model (`typed_decide`) instead of guessing; turning it off restores
+plain reasoning. State lives in this plugin's session extension
+(`decisionIntervention`), so it is per session and survives a page reload.
+
+Requirements on the host:
+
+- **Settings → Labs → Custom plugin UI** (`gateway.controlUi.experimental.customPlugins`)
+  for user-installed native UI, plus HTTPS (native assets need the secure cookie).
+- `plugins.entries.typed-decisions.hooks.allowConversationAccess: true` if you
+  want the prompt-hook half (the switch alone works without it; the agent then
+  just follows the switch state manually).
+
+The accessory owns a probe for verification:
+
+```js
+window.__openclawTypedDecisions.probe()
+// { mounted, sessionKey, agentId, checked, pending,
+//   hitTest: { ok, x, y, blocking }, lastError, writes, updatedAt }
+//   hitTest.ok === false -> `blocking` names the element covering the switch
+```
+
+## Building the browser bundle
+
+The backend has no build step and no runtime dependencies. The Control UI
+bundle does:
+
+```bash
+npm install
+npm run build          # scripts/build-ui.mjs -> dist/control-ui/<hash>/index.js
+```
+
+The build writes the content-hashed entry into `openclaw.plugin.json.controlUi`.
+After a browser-only change, rebuild and use **Plugins → Customize UI → Reload
+plugin UI** in the Control UI.
+
 ## Notes
 
 - Credentials are re-read per request with a 15 s cache; a transient filesystem
@@ -62,5 +102,6 @@ the tool.
   (`credentials-unavailable`, `authentication`, `rate-limited`, `transport`,
   `unsupported-input`, `invalid-response`). Caller cancellation rejects, as the
   provider contract requires.
-- No build step, no runtime dependencies. Only the documented
-  `openclaw/plugin-sdk/plugin-entry` subpath is imported eagerly.
+- No runtime dependencies. Only documented host SDK subpaths are imported
+  (`openclaw/plugin-sdk/plugin-entry` eagerly, optional host helpers lazily);
+  the browser bundle keeps its `openclaw/plugin-sdk/control-ui` import external.

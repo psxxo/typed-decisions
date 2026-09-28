@@ -1,7 +1,7 @@
 {
   "id": "typed-decisions",
   "name": "Typed Decisions",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "System One typed decision provider: choice / score / boolean judgments with probability distributions for OpenClaw's decisionModel role.",
   "categories": [
     "other"
@@ -61,5 +61,8 @@
         "description": "Per-request timeout in milliseconds (host caps the effective deadline at 30000). Default 20000."
       }
     }
+  },
+  "controlUi": {
+    "entry": "dist/control-ui/6e390311b8d3/index.js"
   }
 }
