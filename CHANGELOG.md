@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.2.0
+
+- Move「决策介入」from the session header into the chat **composer toolbar**
+  (`registerAction` with `placement: "composer"` instead of `registerAccessory`),
+  so it sits in the input row beside the other composer controls. The host
+  renders the action inside the composer's own stacking context, so it stays
+  above the message layer without the plugin managing z-index.
+- The control is now a host-rendered action with a state-aware label
+  (`决策介入 · 开` / `决策介入 · 关`, `disabled` while a write is in flight)
+  instead of a custom shadow-DOM switch, because `registerAccessory` only offers
+  the `session-header` placement this change moves away from.
+- Rework the probe: it now reports `activated`, per-session `checked`, `loaded`,
+  `pending`, `lastError`, `writes` and `updatedAt`
+  (`window.__openclawTypedDecisions.probe()`). The click-occlusion hit test is
+  gone with the custom element — the host owns the button's layering now.
+
 ## 1.1.2
 
 - Fix a scope bug in the browser entry: the probe's element list was declared

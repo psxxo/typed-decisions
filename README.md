@@ -54,30 +54,37 @@ Tool availability and the decision-model role are independent: allowlisting the
 tool does not select a background model, and selecting the role does not expose
 the tool.
 
-## 「决策介入」switch (native Control UI)
+## 「决策介入」 (native Control UI)
 
-The plugin ships a native Control UI accessory: a **决策介入** switch in the chat
-window's session header, with the switch control to the left of the label.
+The plugin ships a native Control UI action in the chat **composer toolbar**
+(`registerAction`, `placement: "composer"`), beside the other input controls.
 Turning it on marks **that session** so the agent routes judgments through the
 decision model (`typed_decide`) instead of guessing; turning it off restores
-plain reasoning. State lives in this plugin's session extension
-(`decisionIntervention`), so it is per session and survives a page reload.
+plain reasoning. The label carries the state (`决策介入 · 开` / `决策介入 · 关`)
+and is disabled while a write is in flight. State lives in this plugin's session
+extension (`decisionIntervention`), so it is per session and survives a page
+reload.
+
+Because the host renders the action inside the composer row, it stays above the
+message layer on its own; there is no plugin-managed z-index or overlay risk.
 
 Requirements on the host:
 
 - **Settings → Labs → Custom plugin UI** (`gateway.controlUi.experimental.customPlugins`)
   for user-installed native UI, plus HTTPS (native assets need the secure cookie).
 - `plugins.entries.typed-decisions.hooks.allowConversationAccess: true` if you
-  want the prompt-hook half (the switch alone works without it; the agent then
+  want the prompt-hook half (the control alone works without it; the agent then
   just follows the switch state manually).
 
-The accessory owns a probe for verification:
+The registry keeps a probe for verification:
 
 ```js
 window.__openclawTypedDecisions.probe()
-// { mounted, sessionKey, agentId, checked, pending,
-//   hitTest: { ok, x, y, blocking }, lastError, writes, updatedAt }
-//   hitTest.ok === false -> `blocking` names the element covering the switch
+// { surface: "composer-action", activated: true,
+//   checked: { "<sessionKey>": true }, loaded: ["<sessionKey>"],
+//   pending: false, lastError: null, writes: 1, updatedAt: 179056... }
+//   activated -> the entry ran to completion in the Control UI
+//   writes    -> successful toggles; a click that never reached the Gateway shows up here
 ```
 
 ## Building the browser bundle
