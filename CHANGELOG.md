@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.2
+
+- Keep the on-state colour tied to the host theme (`var(--accent, #2f7cf6)`). The
+  1.3.1 attempt to force green is withdrawn at the owner's request — the red seen
+  here is the theme accent, not an error, and it should stay consistent with the
+  rest of the UI. The real error state is still distinguishable by its red label
+  text (`data-state="error"`).
+
 ## 1.3.1
 
 - Placement tweak from the owner's review: default offset becomes `{x: 61, y: 24}`
@@ -7,10 +15,6 @@
   red-box annotation pointed.
 - Drop the switch's border and drop shadow; it now reads as a bare control in the
   composer row.
-- Fix the on-state colour: the track used `var(--accent, …)`, which resolves to
-  the host theme's red here, so "on" looked alarming. It is now a fixed green
-  (`#22c55e`, white knob); the error state still marks itself red via the track
-  and label.
 
 ## 1.3.0
 

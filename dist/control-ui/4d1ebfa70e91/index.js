@@ -31,10 +31,9 @@ var STYLE = `
   position: absolute; top: 1.5px; left: 1.5px; width: 12px; height: 12px;
   border-radius: 50%; background: #fff; transition: transform .15s ease;
 }
-.td-switch[aria-checked="true"] .td-track { background: #22c55e; }
+.td-switch[aria-checked="true"] .td-track { background: var(--accent, #2f7cf6); }
 .td-switch[aria-checked="true"] .td-knob { transform: translateX(11px); }
 .td-label { white-space: nowrap; }
-.td-switch[data-state="error"] .td-track { background: #d9534f; }
 .td-switch[data-state="error"] .td-label { color: #d9534f; }
 `;
 function registry() {
