@@ -48,6 +48,7 @@ function registry() {
     placement: { anchored: false, offset: { ...DEFAULT_OFFSET }, left: null, top: null, anchor: null },
     hitTest: { ok: null, x: 0, y: 0, blocking: null },
     lastError: null,
+    errorKind: null,
     writes: 0,
     updatedAt: null
   };
@@ -192,7 +193,7 @@ var control_ui_default = defineControlUiPlugin({
         const render = () => {
           button.setAttribute("aria-checked", checked ? "true" : "false");
           button.disabled = pending;
-          button.dataset.state = state.lastError ? "error" : "ok";
+          button.dataset.state = state.errorKind === "write" ? "error" : "ok";
           button.title = state.lastError ? `${LABEL}\uFF1A${state.lastError}` : `${LABEL}\uFF1A${checked ? "\u5F00" : "\u5173"}\uFF08\u672C\u4F1A\u8BDD\uFF09`;
           state.mounted = true;
           state.sessionKey = sessionKey;
@@ -239,21 +240,29 @@ var control_ui_default = defineControlUiPlugin({
         const reposition = () => schedule();
         const readState = async () => {
           if (!sessionKey) return;
-          try {
-            const response = await host.request("plugins.sessionAction", {
-              pluginId: PLUGIN_ID,
-              actionId: SESSION_ACTION_ID,
-              sessionKey,
-              agentId: agentId ?? void 0
-            });
-            if (disposed) return;
-            if (response && response.ok === false) throw new Error(response.error ?? "read-failed");
-            checked = response?.result?.enabled === true;
-            state.lastError = null;
-          } catch (error) {
-            if (disposed) return;
-            state.lastError = error instanceof Error ? error.message : String(error);
-            console.warn(`[${PLUGIN_ID}] \u8BFB\u53D6\u51B3\u7B56\u4ECB\u5165\u72B6\u6001\u5931\u8D25\uFF1A${state.lastError}`);
+          for (let attempt = 0; attempt < 2; attempt += 1) {
+            try {
+              const response = await host.request("plugins.sessionAction", {
+                pluginId: PLUGIN_ID,
+                actionId: SESSION_ACTION_ID,
+                sessionKey,
+                agentId: agentId ?? void 0,
+                payload: {}
+              });
+              if (disposed) return;
+              if (response && response.ok === false) throw new Error(response.error ?? "read-failed");
+              checked = response?.result?.enabled === true;
+              state.lastError = null;
+              state.errorKind = null;
+              render();
+              return;
+            } catch (error) {
+              if (disposed) return;
+              state.lastError = error instanceof Error ? error.message : String(error);
+              state.errorKind = "read";
+              console.warn(`[${PLUGIN_ID}] \u8BFB\u53D6\u51B3\u7B56\u4ECB\u5165\u72B6\u6001\u5931\u8D25\uFF1A${state.lastError}`);
+              if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 800));
+            }
           }
           render();
         };
@@ -271,9 +280,11 @@ var control_ui_default = defineControlUiPlugin({
             });
             checked = next;
             state.lastError = null;
+            state.errorKind = null;
             state.writes += 1;
           } catch (error) {
             state.lastError = error instanceof Error ? error.message : String(error);
+            state.errorKind = "write";
             console.warn(`[${PLUGIN_ID}] \u5199\u5165\u51B3\u7B56\u4ECB\u5165\u72B6\u6001\u5931\u8D25\uFF1A${state.lastError}`);
           }
           pending = false;
@@ -303,6 +314,7 @@ var control_ui_default = defineControlUiPlugin({
               agentId = nextAgent;
               checked = false;
               state.lastError = null;
+              state.errorKind = null;
               render();
               void readState();
             } else {

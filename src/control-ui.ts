@@ -48,6 +48,7 @@ type Probe = {
   };
   hitTest: { ok: boolean | null; x: number; y: number; blocking: string | null };
   lastError: string | null;
+  errorKind: "read" | "write" | null;
   writes: number;
   updatedAt: number | null;
 };
@@ -104,6 +105,7 @@ function registry(): ProbeRegistry {
     placement: { anchored: false, offset: { ...DEFAULT_OFFSET }, left: null, top: null, anchor: null },
     hitTest: { ok: null, x: 0, y: 0, blocking: null },
     lastError: null,
+    errorKind: null,
     writes: 0,
     updatedAt: null,
   };
@@ -272,7 +274,7 @@ export default defineControlUiPlugin({
         const render = () => {
           button.setAttribute("aria-checked", checked ? "true" : "false");
           button.disabled = pending;
-          button.dataset.state = state.lastError ? "error" : "ok";
+          button.dataset.state = state.errorKind === "write" ? "error" : "ok";
           button.title = state.lastError
             ? `${LABEL}：${state.lastError}`
             : `${LABEL}：${checked ? "开" : "关"}（本会话）`;
@@ -326,25 +328,36 @@ export default defineControlUiPlugin({
 
         const readState = async () => {
           if (!sessionKey) return;
-          try {
-            const response = await host.request<{
-              ok?: boolean;
-              result?: { enabled?: boolean };
-              error?: string;
-            }>("plugins.sessionAction", {
-              pluginId: PLUGIN_ID,
-              actionId: SESSION_ACTION_ID,
-              sessionKey,
-              agentId: agentId ?? undefined,
-            });
-            if (disposed) return;
-            if (response && response.ok === false) throw new Error(response.error ?? "read-failed");
-            checked = response?.result?.enabled === true;
-            state.lastError = null;
-          } catch (error) {
-            if (disposed) return;
-            state.lastError = error instanceof Error ? error.message : String(error);
-            console.warn(`[${PLUGIN_ID}] 读取决策介入状态失败：${state.lastError}`);
+          // The action's input schema is an empty object, so the payload must be
+          // present: omitting it fails host validation with
+          // "plugin session action payload does not match schema: <root>: must be object".
+          for (let attempt = 0; attempt < 2; attempt += 1) {
+            try {
+              const response = await host.request<{
+                ok?: boolean;
+                result?: { enabled?: boolean };
+                error?: string;
+              }>("plugins.sessionAction", {
+                pluginId: PLUGIN_ID,
+                actionId: SESSION_ACTION_ID,
+                sessionKey,
+                agentId: agentId ?? undefined,
+                payload: {},
+              });
+              if (disposed) return;
+              if (response && response.ok === false) throw new Error(response.error ?? "read-failed");
+              checked = response?.result?.enabled === true;
+              state.lastError = null;
+              state.errorKind = null;
+              render();
+              return;
+            } catch (error) {
+              if (disposed) return;
+              state.lastError = error instanceof Error ? error.message : String(error);
+              state.errorKind = "read";
+              console.warn(`[${PLUGIN_ID}] 读取决策介入状态失败：${state.lastError}`);
+              if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 800));
+            }
           }
           render();
         };
@@ -363,9 +376,11 @@ export default defineControlUiPlugin({
             });
             checked = next;
             state.lastError = null;
+            state.errorKind = null;
             state.writes += 1;
           } catch (error) {
             state.lastError = error instanceof Error ? error.message : String(error);
+            state.errorKind = "write";
             console.warn(`[${PLUGIN_ID}] 写入决策介入状态失败：${state.lastError}`);
           }
           pending = false;
@@ -402,6 +417,7 @@ export default defineControlUiPlugin({
               agentId = nextAgent;
               checked = false;
               state.lastError = null;
+              state.errorKind = null;
               render();
               void readState();
             } else {

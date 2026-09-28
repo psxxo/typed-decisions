@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.3.3
+
+- Fix the state read: the plugin's `decision-intervention.state` action declares
+  an empty-object schema, so `plugins.sessionAction` must carry `payload: {}`.
+  Omitting it made the host reject every read with
+  `INVALID_REQUEST … does not match schema: <root>: must be object`, which the
+  UI painted as an error (red label) on first paint until the first successful
+  write cleared it. The read now sends the payload, and retries once.
+- Separate read failures from write failures (`errorKind`): only a failed
+  **write** marks the control as errored; a read failure stays diagnostic
+  (`lastError` in the probe plus a console warning) instead of recolouring the
+  label, since it does not mean the control itself is broken.
+
 ## 1.3.2
 
 - Keep the on-state colour tied to the host theme (`var(--accent, #2f7cf6)`). The
