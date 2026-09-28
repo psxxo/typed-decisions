@@ -1,5 +1,9 @@
+// ../../../../usr/local/lib/node_modules/openclaw/dist/plugin-sdk/control-ui.js
+function defineControlUiPlugin(plugin) {
+  return plugin;
+}
+
 // src/control-ui.ts
-import { defineControlUiPlugin } from "openclaw/plugin-sdk/control-ui";
 var PLUGIN_ID = "typed-decisions";
 var NAMESPACE = "decision-intervention";
 var SESSION_ACTION_ID = "decision-intervention.state";
@@ -69,7 +73,6 @@ var control_ui_default = defineControlUiPlugin({
     const state = probe.state;
     host.ui.registerAccessory({
       id: "decision-intervention",
-      label: LABEL,
       placement: "session-header",
       mount(container, context) {
         const props = context.props ?? {};

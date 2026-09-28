@@ -113,7 +113,6 @@ export default defineControlUiPlugin({
 
     host.ui.registerAccessory({
       id: "decision-intervention",
-      label: LABEL,
       placement: "session-header",
       mount(container, context) {
         const props = (context.props ?? {}) as Record<string, unknown>;

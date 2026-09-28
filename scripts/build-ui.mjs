@@ -9,7 +9,9 @@
 
 import { build } from "esbuild";
 import { createHash } from "node:crypto";
+import { existsSync, readdirSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -18,6 +20,19 @@ const sourcePath = join(rootDir, "src", "control-ui.ts");
 const manifestPath = join(rootDir, "openclaw.plugin.json");
 const distDir = join(rootDir, "dist", "control-ui");
 const check = process.argv.includes("--check");
+
+// The browser bundle must be self-contained: this host serves user-installed
+// plugin UI without an import map, so a bare `openclaw/plugin-sdk/...` import
+// fails at module resolution and the plugin never activates (observed:
+// 'Failed to resolve module specifier "openclaw/plugin-sdk/control-ui"').
+// Inline the host's own SDK modules instead of marking them external.
+const sdkDir = resolveSdkDir();
+const alias = {};
+if (sdkDir) {
+  for (const name of readdirSync(sdkDir)) {
+    if (name.endsWith(".js")) alias[`openclaw/plugin-sdk/${name.slice(0, -3)}`] = join(sdkDir, name);
+  }
+}
 
 const result = await build({
   entryPoints: [sourcePath],
@@ -30,7 +45,7 @@ const result = await build({
   write: false,
   outdir: distDir,
   entryNames: "index",
-  external: ["openclaw", "openclaw/*"],
+  alias,
 });
 
 const js = result.outputFiles.find((file) => file.path.endsWith(".js"));
@@ -79,4 +94,24 @@ async function exists(path) {
   } catch {
     return false;
   }
+}
+
+function resolveSdkDir() {
+  const require = createRequire(import.meta.url);
+  const candidates = [];
+  try {
+    candidates.push(join(dirname(require.resolve("openclaw/package.json")), "dist", "plugin-sdk"));
+  } catch {
+    // not resolvable from the checkout; fall through to known locations
+  }
+  candidates.push(join(dirname(process.execPath), "..", "lib", "node_modules", "openclaw", "dist", "plugin-sdk"));
+  candidates.push("/usr/local/lib/node_modules/openclaw/dist/plugin-sdk");
+  const found = candidates.find((path) => existsSync(path));
+  if (!found) {
+    throw new Error(
+      `cannot locate the host SDK modules (looked in ${candidates.join(", ")}); ` +
+        "the browser bundle must inline them because this host serves plugin UI without an import map",
+    );
+  }
+  return found;
 }
