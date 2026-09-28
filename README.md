@@ -56,36 +56,47 @@ the tool.
 
 ## 「决策介入」 (native Control UI)
 
-The plugin ships a native Control UI action in the chat **composer toolbar**
-(`registerAction`, `placement: "composer"`), beside the other input controls.
+The plugin ships a native Control UI accessory: the **决策介入** switch, with the
+switch control to the left of the label. It is mounted in the session header and
+then **relocated by offset** into the chat composer row (bottom input area), so
+it sits where the input controls live while keeping its own look.
+
 Turning it on marks **that session** so the agent routes judgments through the
 decision model (`typed_decide`) instead of guessing; turning it off restores
-plain reasoning. The label carries the state (`决策介入 · 开` / `决策介入 · 关`)
-and is disabled while a write is in flight. State lives in this plugin's session
-extension (`decisionIntervention`), so it is per session and survives a page
-reload.
+plain reasoning. State lives in this plugin's session extension
+(`decisionIntervention`), so it is per session and survives a page reload.
 
-Because the host renders the action inside the composer row, it stays above the
-message layer on its own; there is no plugin-managed z-index or overlay risk.
+How the offset works: the Control UI offers a single accessory placement
+(`session-header`), so the control is mounted there and positioned with
+`position: fixed` from the composer box's geometry
+(`left = composer.left + dx`, `top = composer.bottom - dy`). A fixed element
+escapes ancestor clipping, and an explicit z-index keeps it above the app
+layers — so it is not clipped by the transcript nor covered by overlays. The
+coordinates are recomputed on resize, scroll, and layout changes; outside a chat
+view (no composer) the control falls back to its plain header position.
 
 Requirements on the host:
 
 - **Settings → Labs → Custom plugin UI** (`gateway.controlUi.experimental.customPlugins`)
   for user-installed native UI, plus HTTPS (native assets need the secure cookie).
 - `plugins.entries.typed-decisions.hooks.allowConversationAccess: true` if you
-  want the prompt-hook half (the control alone works without it; the agent then
+  want the prompt-hook half (the switch alone works without it; the agent then
   just follows the switch state manually).
 
-The registry keeps a probe for verification:
+The accessory owns a probe for verification and live tuning:
 
 ```js
 window.__openclawTypedDecisions.probe()
-// { surface: "composer-action", activated: true,
-//   checked: { "<sessionKey>": true }, loaded: ["<sessionKey>"],
-//   pending: false, lastError: null, writes: 1, updatedAt: 179056... }
-//   activated -> the entry ran to completion in the Control UI
-//   writes    -> successful toggles; a click that never reached the Gateway shows up here
+// { mounted, sessionKey, agentId, checked, pending,
+//   placement: { anchored, offset: {x,y}, left, top, anchor },
+//   hitTest: { ok, x, y, blocking }, lastError, writes, updatedAt }
+//   hitTest.ok === false -> `blocking` names the element covering the switch
+
+window.__openclawTypedDecisions.nudge(-10, 4)  // shift by dx,dy; returns the new offset
 ```
+
+Defaults are `{x: 46, y: 34}`; `nudge()` adjusts the live placement so the values
+can be dialed in from the console and then baked into `DEFAULT_OFFSET`.
 
 ## Building the browser bundle
 

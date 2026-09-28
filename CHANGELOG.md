@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.3.0
+
+- Put the original「决策介入」switch back and **move it by offset** into the chat
+  composer row instead of swapping registration surfaces. The control is still a
+  `registerAccessory` (session-header) mount, positioned with `position: fixed`
+  at coordinates derived from the composer box (`left = composer.left + dx`,
+  `top = composer.bottom - dy`), re-computed on resize/scroll/layout changes.
+  A fixed element escapes ancestor clipping and the explicit z-index keeps it on
+  top, so it is neither clipped by the transcript nor covered by app overlays.
+  Supersedes the 1.2.0 composer-action approach, which replaced the control's
+  look and feel; the owner wanted this control relocated, not replaced.
+- Offsets default to `{x: 46, y: 34}` and are tunable live from the page:
+  `window.__openclawTypedDecisions.nudge(dx, dy)` returns the new offset. The
+  probe reports `placement` (anchored / offset / left / top / anchor) alongside
+  the previous `hitTest`, so the placement can be verified from the console.
+- Falls back to the plain session-header position when no composer is on screen
+  (non-chat views), and hides while its pane is not presented.
+
 ## 1.2.0
 
 - Move「决策介入」from the session header into the chat **composer toolbar**

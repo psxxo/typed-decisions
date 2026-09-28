@@ -1,73 +1,18 @@
-// Typed Decisions — native Control UI contribution.
-//
-// Contributes a session-header accessory that renders the「决策介入」switch and
-// **relocates it by offset** into the chat composer row (bottom input area),
-// keeping it visually on top of the message layer.
-//
-// Why offset instead of another registration surface: the Control UI offers
-// exactly one accessory placement (`session-header`), so the control is mounted
-// there and then positioned with `position: fixed` at coordinates derived from
-// the composer, re-computed as the layout changes. A fixed element escapes
-// ancestor clipping, and an explicit z-index keeps it above the app layers.
-//
-// Monitoring is built in: the component owns a probe that reports whether the
-// switch is actually the topmost element at its own center
-// (`document.elementFromPoint`), so an overlay stealing clicks is detected
-// without repeated manual clicking. Tune the placement live with
-// `window.__openclawTypedDecisions.nudge(dx, dy)`.
-//
-// Only the documented SDK subpath is imported; everything else is plain DOM.
-
-import { defineControlUiPlugin, type ControlUiHost } from "openclaw/plugin-sdk/control-ui";
-
-const PLUGIN_ID = "typed-decisions";
-const NAMESPACE = "decision-intervention";
-const SESSION_ACTION_ID = "decision-intervention.state";
-const LABEL = "决策介入";
-const Z_INDEX = 2147483000;
-const PROBE_INTERVAL_MS = 3000;
-const PROBE_WINDOW_MS = 60_000;
-
-/** Distance from the composer box's left/bottom edges to the switch. */
-const DEFAULT_OFFSET = { x: 46, y: 34 };
-
-type Offset = { x: number; y: number };
-
-type Probe = {
-  mounted: boolean;
-  sessionKey: string | null;
-  agentId: string | null;
-  checked: boolean | null;
-  pending: boolean;
-  placement: {
-    anchored: boolean;
-    offset: Offset;
-    left: number | null;
-    top: number | null;
-    anchor: string | null;
-  };
-  hitTest: { ok: boolean | null; x: number; y: number; blocking: string | null };
-  lastError: string | null;
-  writes: number;
-  updatedAt: number | null;
-};
-
-type ProbeRegistry = {
-  readonly state: Probe;
-  probe: () => Probe;
-  elements: () => HTMLElement[];
-  add: (element: HTMLElement) => void;
-  drop: (element: HTMLElement) => void;
-  nudge: (dx: number, dy: number) => Offset;
-};
-
-declare global {
-  interface Window {
-    __openclawTypedDecisions?: ProbeRegistry;
-  }
+// ../../../../usr/local/lib/node_modules/openclaw/dist/plugin-sdk/control-ui.js
+function defineControlUiPlugin(plugin) {
+  return plugin;
 }
 
-const STYLE = `
+// src/control-ui.ts
+var PLUGIN_ID = "typed-decisions";
+var NAMESPACE = "decision-intervention";
+var SESSION_ACTION_ID = "decision-intervention.state";
+var LABEL = "\u51B3\u7B56\u4ECB\u5165";
+var Z_INDEX = 2147483e3;
+var PROBE_INTERVAL_MS = 3e3;
+var PROBE_WINDOW_MS = 6e4;
+var DEFAULT_OFFSET = { x: 46, y: 34 };
+var STYLE = `
 :host { display: inline-flex; align-items: center; }
 .td-switch {
   display: inline-flex; align-items: center; gap: 8px;
@@ -94,11 +39,10 @@ const STYLE = `
 .td-label { white-space: nowrap; }
 .td-switch[data-state="error"] { border-color: #d9534f; }
 `;
-
-function registry(): ProbeRegistry {
+function registry() {
   const existing = window.__openclawTypedDecisions;
   if (existing) return existing;
-  const state: Probe = {
+  const state = {
     mounted: false,
     sessionKey: null,
     agentId: null,
@@ -108,15 +52,15 @@ function registry(): ProbeRegistry {
     hitTest: { ok: null, x: 0, y: 0, blocking: null },
     lastError: null,
     writes: 0,
-    updatedAt: null,
+    updatedAt: null
   };
-  const elements: HTMLElement[] = [];
-  const entry: ProbeRegistry = {
+  const elements = [];
+  const entry = {
     state,
     probe: () => ({
       ...state,
       placement: { ...state.placement, offset: { ...state.placement.offset } },
-      hitTest: { ...state.hitTest },
+      hitTest: { ...state.hitTest }
     }),
     elements: () => [...elements],
     add: (element) => {
@@ -131,28 +75,19 @@ function registry(): ProbeRegistry {
       state.placement.offset.y += dy;
       for (const element of elements) element.dispatchEvent(new Event("td:reposition"));
       return { ...state.placement.offset };
-    },
+    }
   };
   window.__openclawTypedDecisions = entry;
   return entry;
 }
-
-function describe(element: Element | null): string | null {
+function describe(element) {
   if (!element) return null;
   const tag = element.tagName.toLowerCase();
   const id = element.id ? `#${element.id}` : "";
-  const cls =
-    typeof (element as HTMLElement).className === "string" && (element as HTMLElement).className
-      ? `.${(element as HTMLElement).className.trim().split(/\s+/).slice(0, 2).join(".")}`
-      : "";
+  const cls = typeof element.className === "string" && element.className ? `.${element.className.trim().split(/\s+/).slice(0, 2).join(".")}` : "";
   return `${tag}${id}${cls}`;
 }
-
-/**
- * Locate the composer box: the widest visible textarea's enclosing container.
- * Returns null outside a chat view (no composer on screen).
- */
-function findComposer(anchor: Element | null): { rect: DOMRect; label: string | null } | null {
+function findComposer(anchor) {
   const areas = Array.from(document.querySelectorAll("textarea")).filter((element) => {
     const rect = element.getBoundingClientRect();
     return rect.width > 120 && rect.height > 0 && element.offsetParent !== null;
@@ -161,10 +96,8 @@ function findComposer(anchor: Element | null): { rect: DOMRect; label: string | 
   areas.sort((a, b) => a.getBoundingClientRect().width - b.getBoundingClientRect().width);
   const textarea = areas[areas.length - 1];
   const own = textarea.getBoundingClientRect();
-  let node: HTMLElement = textarea;
+  let node = textarea;
   let best = own;
-  // Climb while the ancestor still covers the textarea's width, to reach the
-  // container that also holds the toolbar row below the input.
   for (let depth = 0; depth < 6 && node.parentElement; depth += 1) {
     const parent = node.parentElement;
     const rect = parent.getBoundingClientRect();
@@ -175,35 +108,27 @@ function findComposer(anchor: Element | null): { rect: DOMRect; label: string | 
   }
   return { rect: best, label: describe(anchor ?? node) };
 }
-
-export default defineControlUiPlugin({
+var control_ui_default = defineControlUiPlugin({
   id: PLUGIN_ID,
-  activate(host: ControlUiHost) {
+  activate(host) {
     const probe = registry();
     const state = probe.state;
-
     host.ui.registerAccessory({
       id: "decision-intervention",
       placement: "session-header",
       mount(container, context) {
-        const props = (context.props ?? {}) as Record<string, unknown>;
-        const readKey = () =>
-          (typeof props.sessionKey === "string" && props.sessionKey) ||
-          (typeof props.key === "string" && props.key) ||
-          host.sessions.selectedKey ||
-          null;
-        const readAgent = () => (typeof props.agentId === "string" && props.agentId) || null;
-
+        const props = context.props ?? {};
+        const readKey = () => typeof props.sessionKey === "string" && props.sessionKey || typeof props.key === "string" && props.key || host.sessions.selectedKey || null;
+        const readAgent = () => typeof props.agentId === "string" && props.agentId || null;
         let sessionKey = readKey();
         let agentId = readAgent();
         let checked = false;
         let pending = false;
         let disposed = false;
         let presented = context.presented !== false;
-        let probeTimer: ReturnType<typeof setInterval> | undefined;
+        let probeTimer;
         let probeDeadline = 0;
         let frame = 0;
-
         const root = container.attachShadow ? container.attachShadow({ mode: "open" }) : container;
         const style = document.createElement("style");
         style.textContent = STYLE;
@@ -223,9 +148,6 @@ export default defineControlUiPlugin({
         label.textContent = LABEL;
         button.append(track, label);
         root.append(style, button);
-
-        // Offsets the control into the composer row; falls back to the session
-        // header when no composer is on screen.
         const place = () => {
           if (disposed) return;
           if (!presented) {
@@ -240,7 +162,7 @@ export default defineControlUiPlugin({
               offset: { ...state.placement.offset },
               left: null,
               top: null,
-              anchor: null,
+              anchor: null
             };
             container.style.position = "";
             container.style.left = "";
@@ -260,10 +182,9 @@ export default defineControlUiPlugin({
             offset: { ...state.placement.offset },
             left,
             top,
-            anchor: anchorLabel,
+            anchor: anchorLabel
           };
         };
-
         const schedule = () => {
           if (disposed || frame) return;
           frame = requestAnimationFrame(() => {
@@ -271,14 +192,11 @@ export default defineControlUiPlugin({
             place();
           });
         };
-
         const render = () => {
           button.setAttribute("aria-checked", checked ? "true" : "false");
           button.disabled = pending;
           button.dataset.state = state.lastError ? "error" : "ok";
-          button.title = state.lastError
-            ? `${LABEL}：${state.lastError}`
-            : `${LABEL}：${checked ? "开" : "关"}（本会话）`;
+          button.title = state.lastError ? `${LABEL}\uFF1A${state.lastError}` : `${LABEL}\uFF1A${checked ? "\u5F00" : "\u5173"}\uFF08\u672C\u4F1A\u8BDD\uFF09`;
           state.mounted = true;
           state.sessionKey = sessionKey;
           state.agentId = agentId;
@@ -288,7 +206,6 @@ export default defineControlUiPlugin({
           probe.add(button);
           schedule();
         };
-
         const hitTest = () => {
           const rect = button.getBoundingClientRect();
           const x = Math.round(rect.left + rect.width / 2);
@@ -302,43 +219,35 @@ export default defineControlUiPlugin({
           state.hitTest = { ok: hits, x, y, blocking: hits ? null : describe(top) };
           if (!hits && top) {
             console.warn(
-              `[${PLUGIN_ID}] 决策介入开关被页面元素遮挡：(${x},${y}) 命中 ${describe(top)}`,
+              `[${PLUGIN_ID}] \u51B3\u7B56\u4ECB\u5165\u5F00\u5173\u88AB\u9875\u9762\u5143\u7D20\u906E\u6321\uFF1A(${x},${y}) \u547D\u4E2D ${describe(top)}`
             );
           }
         };
-
         const tick = () => {
           if (disposed) return;
           if (Date.now() > probeDeadline) {
             if (probeTimer) clearInterval(probeTimer);
-            probeTimer = undefined;
+            probeTimer = void 0;
             return;
           }
           place();
           hitTest();
         };
-
         const startProbe = () => {
           probeDeadline = Date.now() + PROBE_WINDOW_MS;
           if (probeTimer) clearInterval(probeTimer);
           probeTimer = setInterval(tick, PROBE_INTERVAL_MS);
           requestAnimationFrame(tick);
         };
-
         const reposition = () => schedule();
-
         const readState = async () => {
           if (!sessionKey) return;
           try {
-            const response = await host.request<{
-              ok?: boolean;
-              result?: { enabled?: boolean };
-              error?: string;
-            }>("plugins.sessionAction", {
+            const response = await host.request("plugins.sessionAction", {
               pluginId: PLUGIN_ID,
               actionId: SESSION_ACTION_ID,
               sessionKey,
-              agentId: agentId ?? undefined,
+              agentId: agentId ?? void 0
             });
             if (disposed) return;
             if (response && response.ok === false) throw new Error(response.error ?? "read-failed");
@@ -347,35 +256,33 @@ export default defineControlUiPlugin({
           } catch (error) {
             if (disposed) return;
             state.lastError = error instanceof Error ? error.message : String(error);
-            console.warn(`[${PLUGIN_ID}] 读取决策介入状态失败：${state.lastError}`);
+            console.warn(`[${PLUGIN_ID}] \u8BFB\u53D6\u51B3\u7B56\u4ECB\u5165\u72B6\u6001\u5931\u8D25\uFF1A${state.lastError}`);
           }
           render();
         };
-
-        const writeState = async (next: boolean) => {
+        const writeState = async (next) => {
           if (!sessionKey) return;
           pending = true;
           render();
           try {
             await host.request("sessions.pluginPatch", {
               key: sessionKey,
-              agentId: agentId ?? undefined,
+              agentId: agentId ?? void 0,
               pluginId: PLUGIN_ID,
               namespace: NAMESPACE,
-              value: { enabled: next },
+              value: { enabled: next }
             });
             checked = next;
             state.lastError = null;
             state.writes += 1;
           } catch (error) {
             state.lastError = error instanceof Error ? error.message : String(error);
-            console.warn(`[${PLUGIN_ID}] 写入决策介入状态失败：${state.lastError}`);
+            console.warn(`[${PLUGIN_ID}] \u5199\u5165\u51B3\u7B56\u4ECB\u5165\u72B6\u6001\u5931\u8D25\uFF1A${state.lastError}`);
           }
           pending = false;
           render();
           hitTest();
         };
-
         button.addEventListener("click", () => {
           if (pending) return;
           void writeState(!checked);
@@ -383,22 +290,16 @@ export default defineControlUiPlugin({
         button.addEventListener("td:reposition", reposition);
         window.addEventListener("resize", reposition);
         window.addEventListener("scroll", reposition, { passive: true, capture: true });
-        const observer =
-          typeof ResizeObserver !== "undefined" ? new ResizeObserver(reposition) : undefined;
+        const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(reposition) : void 0;
         observer?.observe(document.documentElement);
-
         render();
         startProbe();
         void readState();
-
         return {
           update(next) {
-            const nextProps = (next.props ?? {}) as Record<string, unknown>;
-            const nextKey =
-              (typeof nextProps.sessionKey === "string" && nextProps.sessionKey) ||
-              (typeof nextProps.key === "string" && nextProps.key) ||
-              null;
-            const nextAgent = (typeof nextProps.agentId === "string" && nextProps.agentId) || null;
+            const nextProps = next.props ?? {};
+            const nextKey = typeof nextProps.sessionKey === "string" && nextProps.sessionKey || typeof nextProps.key === "string" && nextProps.key || null;
+            const nextAgent = typeof nextProps.agentId === "string" && nextProps.agentId || null;
             presented = next.presented !== false;
             if (nextKey !== sessionKey || nextAgent !== agentId) {
               sessionKey = nextKey ?? sessionKey;
@@ -421,13 +322,16 @@ export default defineControlUiPlugin({
             if (frame) cancelAnimationFrame(frame);
             observer?.disconnect();
             window.removeEventListener("resize", reposition);
-            window.removeEventListener("scroll", reposition, { capture: true } as EventListenerOptions);
+            window.removeEventListener("scroll", reposition, { capture: true });
             probe.drop(button);
             state.mounted = probe.elements().length > 0;
             button.remove();
-          },
+          }
         };
-      },
+      }
     });
-  },
+  }
 });
+export {
+  control_ui_default as default
+};
