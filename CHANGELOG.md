@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.3.1
+
+- Placement tweak from the owner's review: default offset becomes `{x: 61, y: 24}`
+  (15 px right, 10 px down from the 1.3.0 defaults), so the switch sits where the
+  red-box annotation pointed.
+- Drop the switch's border and drop shadow; it now reads as a bare control in the
+  composer row.
+- Fix the on-state colour: the track used `var(--accent, …)`, which resolves to
+  the host theme's red here, so "on" looked alarming. It is now a fixed green
+  (`#22c55e`, white knob); the error state still marks itself red via the track
+  and label.
+
 ## 1.3.0
 
 - Put the original「决策介入」switch back and **move it by offset** into the chat

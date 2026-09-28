@@ -29,7 +29,7 @@ const PROBE_INTERVAL_MS = 3000;
 const PROBE_WINDOW_MS = 60_000;
 
 /** Distance from the composer box's left/bottom edges to the switch. */
-const DEFAULT_OFFSET = { x: 46, y: 34 };
+const DEFAULT_OFFSET = { x: 61, y: 24 };
 
 type Offset = { x: number; y: number };
 
@@ -71,16 +71,13 @@ const STYLE = `
 :host { display: inline-flex; align-items: center; }
 .td-switch {
   display: inline-flex; align-items: center; gap: 8px;
-  padding: 3px 8px 3px 6px; border-radius: 999px;
-  border: 1px solid var(--border, rgba(127,127,127,.35));
-  background: var(--surface, transparent); color: inherit;
+  padding: 3px 6px; border: 0; outline: none;
+  background: transparent; color: inherit;
   font: inherit; font-size: 12px; line-height: 1.4;
   cursor: pointer; user-select: none;
-  box-shadow: 0 1px 2px rgba(0,0,0,.12);
 }
-.td-switch:hover { background: var(--hover, rgba(127,127,127,.12)); }
 .td-switch:disabled { cursor: progress; opacity: .7; }
-.td-switch:focus-visible { outline: 2px solid var(--accent, #4c8dff); outline-offset: 1px; }
+.td-switch:focus-visible { outline: 2px solid #4c8dff; outline-offset: 1px; border-radius: 999px; }
 .td-track {
   position: relative; width: 26px; height: 15px; border-radius: 999px;
   background: rgba(127,127,127,.45); transition: background .15s ease;
@@ -89,10 +86,11 @@ const STYLE = `
   position: absolute; top: 1.5px; left: 1.5px; width: 12px; height: 12px;
   border-radius: 50%; background: #fff; transition: transform .15s ease;
 }
-.td-switch[aria-checked="true"] .td-track { background: var(--accent, #2f7cf6); }
+.td-switch[aria-checked="true"] .td-track { background: #22c55e; }
 .td-switch[aria-checked="true"] .td-knob { transform: translateX(11px); }
 .td-label { white-space: nowrap; }
-.td-switch[data-state="error"] { border-color: #d9534f; }
+.td-switch[data-state="error"] .td-track { background: #d9534f; }
+.td-switch[data-state="error"] .td-label { color: #d9534f; }
 `;
 
 function registry(): ProbeRegistry {
