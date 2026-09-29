@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Scope the composer box and the toolbar-control lookup to the composer's own
+  shell (`.agent-chat__composer-shell`). The box used to be found by walking up
+  from the textarea: on a settled chat pane that stops at the shell, but on a
+  freshly opened session page the shell's ancestor (the draft/launcher column)
+  measures as wide as the shell, so the walk climbed into a page container and
+  the control lookup latched onto an element outside the composer — parking the
+  switch past the composer's right edge until the next reload.
 - Keep the switch following even when the animation-frame loop stalls. The
   1.5.0 follow loop re-placed only from `requestAnimationFrame`, so a stalled or
   throttled rAF (or a long frame) left the switch frozen at the coordinate of

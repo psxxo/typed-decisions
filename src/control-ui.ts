@@ -37,6 +37,8 @@ const ADMISSION_LABEL = /完全访问|只读|保护|工作区|Full access|Read-o
 /** The host stacks cached chat panes in one grid cell at `opacity: 0`. */
 const PANE_SELECTOR = ".chat-pane-cache__pane";
 const PANE_VISIBLE_CLASS = "chat-pane-cache__pane--visible";
+/** The composer's own box; the anchor must never leave it. */
+const COMPOSER_SHELL_SELECTOR = ".agent-chat__composer-shell";
 
 type Offset = { x: number; y: number };
 
@@ -229,16 +231,27 @@ function findPlacement(
   const candidates = ranked.length;
   const hiddenCandidates = ranked.filter((candidate) => !candidate.visible).length;
 
-  let box = textarea.getBoundingClientRect();
-  let node: HTMLElement = textarea;
-  const limit = Math.min(window.innerHeight * 0.5, 480);
-  for (let depth = 0; depth < 8 && node.parentElement; depth += 1) {
-    const parent = node.parentElement;
-    const rect = parent.getBoundingClientRect();
-    if (rect.width + 4 < box.width) break;
-    if (rect.height > limit) break;
-    box = rect;
-    node = parent;
+  // Root everything in the composer's own shell. Walking up from the textarea
+  // works on a settled chat pane, but on a freshly opened page the shell's
+  // ancestor (a draft/launcher column) measures as wide as the shell, so the
+  // walk kept climbing into a page container — and the control lookup then
+  // latched onto an element outside the composer, pushing the switch past the
+  // composer's right edge until the next reload. Scoping the box and the
+  // control lookups to the shell keeps the switch inside the composer whatever
+  // the surrounding layout is doing.
+  const shell = textarea.closest(COMPOSER_SHELL_SELECTOR) as HTMLElement | null;
+  let box = (shell ?? textarea).getBoundingClientRect();
+  let node: HTMLElement = shell ?? textarea;
+  if (!shell) {
+    const limit = Math.min(window.innerHeight * 0.5, 480);
+    for (let depth = 0; depth < 8 && node.parentElement; depth += 1) {
+      const parent = node.parentElement;
+      const rect = parent.getBoundingClientRect();
+      if (rect.width + 4 < box.width) break;
+      if (rect.height > limit) break;
+      box = rect;
+      node = parent;
+    }
   }
 
   const isVisible = (element: Element) => {

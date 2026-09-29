@@ -16,6 +16,7 @@ var DEFAULT_GAP = 16;
 var ADMISSION_LABEL = /完全访问|只读|保护|工作区|Full access|Read-only|Guarded|Workspace/;
 var PANE_SELECTOR = ".chat-pane-cache__pane";
 var PANE_VISIBLE_CLASS = "chat-pane-cache__pane--visible";
+var COMPOSER_SHELL_SELECTOR = ".agent-chat__composer-shell";
 var STYLE = `
 :host { display: inline-flex; align-items: center; }
 .td-switch {
@@ -135,16 +136,19 @@ function findPlacement(container, button, offset, cached) {
   const textarea = ranked[0].element;
   const candidates = ranked.length;
   const hiddenCandidates = ranked.filter((candidate) => !candidate.visible).length;
-  let box = textarea.getBoundingClientRect();
-  let node = textarea;
-  const limit = Math.min(window.innerHeight * 0.5, 480);
-  for (let depth = 0; depth < 8 && node.parentElement; depth += 1) {
-    const parent = node.parentElement;
-    const rect = parent.getBoundingClientRect();
-    if (rect.width + 4 < box.width) break;
-    if (rect.height > limit) break;
-    box = rect;
-    node = parent;
+  const shell = textarea.closest(COMPOSER_SHELL_SELECTOR);
+  let box = (shell ?? textarea).getBoundingClientRect();
+  let node = shell ?? textarea;
+  if (!shell) {
+    const limit = Math.min(window.innerHeight * 0.5, 480);
+    for (let depth = 0; depth < 8 && node.parentElement; depth += 1) {
+      const parent = node.parentElement;
+      const rect = parent.getBoundingClientRect();
+      if (rect.width + 4 < box.width) break;
+      if (rect.height > limit) break;
+      box = rect;
+      node = parent;
+    }
   }
   const isVisible = (element) => {
     const rect = element.getBoundingClientRect();
