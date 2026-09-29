@@ -491,33 +491,40 @@ export default defineControlUiPlugin({
           }
         };
 
-        // Continuous alignment: a low-frequency poll keeps the control locked to
-        // the toolbar, and any layout signal (window/viewport resize, scroll,
-        // fullscreen, observed element resize) switches to a short per-frame
-        // burst so it never drifts while the page is being resized or the pane
-        // is moving.
+        // Continuous alignment, at frame rate but writing only when the tracked
+        // geometry actually moved: the composer shell and the control the switch
+        // hangs off are measured every frame, and a full placement runs only when
+        // that geometry changed (plus a slow poll as a backstop). Signals no
+        // longer place synchronously — a window drag fires resize every frame, and
+        // placing inside the event both forced layout mid-event and stacked a
+        // second placement on top of the frame loop, which read as lag.
         const POLL_MS = 250;
-        const BURST_MS = 800;
         let lastSync = 0;
-        let burstUntil = 0;
+        let lastSignature = "";
+        const trackedSignature = () => {
+          if (!observedBox) return "";
+          const box = observedBox.getBoundingClientRect();
+          const anchor = observedAnchor?.getBoundingClientRect();
+          const anchorKey = anchor ? `${Math.round(anchor.left)},${Math.round(anchor.top)}` : "";
+          return `${Math.round(box.left)},${Math.round(box.top)},${Math.round(box.width)},${Math.round(box.height)}|${anchorKey}`;
+        };
+        const syncNow = () => {
+          lastSync = Date.now();
+          safePlace();
+          lastSignature = trackedSignature();
+        };
+        // A layout signal only marks the geometry stale; the frame loop below does
+        // the work, so a burst of signals cannot stack up placements.
         const follow = () => {
-          const now = Date.now();
-          // Place on the first signal of a burst; while a burst is already
-          // running the per-frame pass covers the rest, so a signal must not add
-          // a second full placement per event — a window drag fires resize at
-          // frame rate, and that doubled the work per frame.
-          if (now >= burstUntil) safePlace();
-          burstUntil = now + BURST_MS;
+          lastSignature = "";
         };
         const loop = () => {
           if (disposed) return;
           frame = requestAnimationFrame(loop);
-          const now = Date.now();
           state.loopTicks += 1;
-          state.lastLoopAt = now;
-          if (now < burstUntil || now - lastSync >= POLL_MS) {
-            lastSync = now;
-            safePlace();
+          state.lastLoopAt = Date.now();
+          if (trackedSignature() !== lastSignature || Date.now() - lastSync >= POLL_MS) {
+            syncNow();
           }
         };
 
@@ -664,6 +671,7 @@ export default defineControlUiPlugin({
         const watchdog = setInterval(() => {
           if (disposed) return;
           safePlace();
+          lastSignature = trackedSignature();
         }, WATCHDOG_MS);
         document.addEventListener("visibilitychange", onLayout);
         window.addEventListener("pageshow", onLayout);

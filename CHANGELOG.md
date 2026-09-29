@@ -16,11 +16,13 @@
   from the textarea: on a settled chat pane that stops at the shell, but on a
   freshly opened session page the shell's ancestor (the draft/launcher column)
   measures as wide as the shell, so the walk climbed into a page container.
-- Stop re-placing twice per frame: a layout signal now places immediately only
-  when no burst is already running (a window drag fires resize at frame rate, and
-  the synchronous placement inside the event added jank), and the visibility
-  probes are skipped entirely when only one composer is on screen, instead of
-  running a style walk per candidate per placement.
+- Follow at frame rate instead of on a signal-triggered burst. The composer
+  shell and the anchored control are measured every frame and a full placement
+  runs only when that geometry actually moved (plus a 250 ms poll as a
+  backstop); layout signals just mark the geometry stale, so a window drag can
+  no longer stack a synchronous placement on top of the frame pass (which forced
+  layout mid-event and read as lag), and the switch no longer waits for a signal
+  to catch up with a moving composer.
 - Keep the switch following even when the animation-frame loop stalls. The
   1.5.0 follow loop re-placed only from `requestAnimationFrame`, so a stalled or
   throttled rAF (or a long frame) left the switch frozen at the coordinate of

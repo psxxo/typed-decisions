@@ -332,23 +332,30 @@ var control_ui_default = defineControlUiPlugin({
           }
         };
         const POLL_MS = 250;
-        const BURST_MS = 800;
         let lastSync = 0;
-        let burstUntil = 0;
+        let lastSignature = "";
+        const trackedSignature = () => {
+          if (!observedBox) return "";
+          const box = observedBox.getBoundingClientRect();
+          const anchor = observedAnchor?.getBoundingClientRect();
+          const anchorKey = anchor ? `${Math.round(anchor.left)},${Math.round(anchor.top)}` : "";
+          return `${Math.round(box.left)},${Math.round(box.top)},${Math.round(box.width)},${Math.round(box.height)}|${anchorKey}`;
+        };
+        const syncNow = () => {
+          lastSync = Date.now();
+          safePlace();
+          lastSignature = trackedSignature();
+        };
         const follow = () => {
-          const now = Date.now();
-          if (now >= burstUntil) safePlace();
-          burstUntil = now + BURST_MS;
+          lastSignature = "";
         };
         const loop = () => {
           if (disposed) return;
           frame = requestAnimationFrame(loop);
-          const now = Date.now();
           state.loopTicks += 1;
-          state.lastLoopAt = now;
-          if (now < burstUntil || now - lastSync >= POLL_MS) {
-            lastSync = now;
-            safePlace();
+          state.lastLoopAt = Date.now();
+          if (trackedSignature() !== lastSignature || Date.now() - lastSync >= POLL_MS) {
+            syncNow();
           }
         };
         const render = () => {
@@ -472,6 +479,7 @@ var control_ui_default = defineControlUiPlugin({
         const watchdog = setInterval(() => {
           if (disposed) return;
           safePlace();
+          lastSignature = trackedSignature();
         }, WATCHDOG_MS);
         document.addEventListener("visibilitychange", onLayout);
         window.addEventListener("pageshow", onLayout);
