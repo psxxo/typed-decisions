@@ -14,6 +14,8 @@ var PROBE_WINDOW_MS = 6e4;
 var DEFAULT_OFFSET = { x: 61, y: 24 };
 var DEFAULT_GAP = 16;
 var ADMISSION_LABEL = /完全访问|只读|保护|工作区|Full access|Read-only|Guarded|Workspace/;
+var PANE_SELECTOR = ".chat-pane-cache__pane";
+var PANE_VISIBLE_CLASS = "chat-pane-cache__pane--visible";
 var STYLE = `
 :host { display: inline-flex; align-items: center; }
 .td-switch {
@@ -52,7 +54,15 @@ function registry() {
     lastError: null,
     errorKind: null,
     writes: 0,
-    updatedAt: null
+    updatedAt: null,
+    loopTicks: 0,
+    lastLoopAt: null,
+    places: 0,
+    lastPlaceAt: null,
+    reason: "none",
+    candidates: 0,
+    hiddenCandidates: 0,
+    placementError: null
   };
   const elements = [];
   const entry = {
@@ -87,14 +97,44 @@ function describe(element) {
   const cls = typeof element.className === "string" && element.className ? `.${element.className.trim().split(/\s+/).slice(0, 2).join(".")}` : "";
   return `${tag}${id}${cls}`;
 }
-function findPlacement(button, offset, cached) {
+function isReallyVisible(element) {
+  const probe = element;
+  if (typeof probe.checkVisibility === "function") {
+    try {
+      return probe.checkVisibility({ checkOpacity: true });
+    } catch {
+    }
+  }
+  let node = element;
+  for (let depth = 0; node && depth < 40; depth += 1) {
+    const style = window.getComputedStyle(node);
+    if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0") {
+      return false;
+    }
+    node = node.parentElement;
+  }
+  return true;
+}
+function findPlacement(container, button, offset, cached) {
   const areas = Array.from(document.querySelectorAll("textarea")).filter((element) => {
     const rect = element.getBoundingClientRect();
     return rect.width > 120 && rect.height > 0 && element.offsetParent !== null;
   });
   if (areas.length === 0) return null;
-  areas.sort((a, b) => b.getBoundingClientRect().width - a.getBoundingClientRect().width);
-  const textarea = areas[0];
+  const ownPane = container.closest(PANE_SELECTOR);
+  const ranked = areas.map((element) => ({
+    element,
+    width: element.getBoundingClientRect().width,
+    visible: isReallyVisible(element),
+    samePane: ownPane !== null && element.closest(PANE_SELECTOR) === ownPane
+  })).sort((a, b) => {
+    if (a.samePane !== b.samePane) return a.samePane ? -1 : 1;
+    if (a.visible !== b.visible) return a.visible ? -1 : 1;
+    return b.width - a.width;
+  });
+  const textarea = ranked[0].element;
+  const candidates = ranked.length;
+  const hiddenCandidates = ranked.filter((candidate) => !candidate.visible).length;
   let box = textarea.getBoundingClientRect();
   let node = textarea;
   const limit = Math.min(window.innerHeight * 0.5, 480);
@@ -120,12 +160,12 @@ function findPlacement(button, offset, cached) {
     admission = null;
     if (Date.now() - cached.at > 2e3) {
       cached.at = Date.now();
-      const candidates = Array.from(node.querySelectorAll("button, span, div")).filter((element) => {
+      const candidates2 = Array.from(node.querySelectorAll("button, span, div")).filter((element) => {
         const text = (element.textContent ?? "").trim();
         return text.length > 0 && ADMISSION_LABEL.test(text) && isVisible(element);
       });
-      candidates.sort((a, b) => a.getBoundingClientRect().width - b.getBoundingClientRect().width);
-      admission = candidates[0] ?? null;
+      candidates2.sort((a, b) => a.getBoundingClientRect().width - b.getBoundingClientRect().width);
+      admission = candidates2[0] ?? null;
       cached.admission = admission;
     }
   }
@@ -135,10 +175,20 @@ function findPlacement(button, offset, cached) {
       top,
       label: "after-admission",
       box: node,
-      anchor: admission
+      anchor: admission,
+      candidates,
+      hiddenCandidates
     };
   }
-  return { left: Math.round(box.left + offset.x), top, label: "composer-offset", box: node, anchor: null };
+  return {
+    left: Math.round(box.left + offset.x),
+    top,
+    label: "composer-offset",
+    box: node,
+    anchor: null,
+    candidates,
+    hiddenCandidates
+  };
 }
 var control_ui_default = defineControlUiPlugin({
   id: PLUGIN_ID,
@@ -190,11 +240,19 @@ var control_ui_default = defineControlUiPlugin({
             container.style.display = "none";
             return;
           }
+          const ownPane = container.closest(PANE_SELECTOR);
+          if (ownPane && !ownPane.classList.contains(PANE_VISIBLE_CLASS)) {
+            container.style.display = "none";
+            return;
+          }
           container.style.display = "";
-          const target = findPlacement(button, state.placement.offset, admissionCache);
+          const target = findPlacement(container, button, state.placement.offset, admissionCache);
           if (!target) {
             applied.left = Number.NaN;
             applied.top = Number.NaN;
+            state.reason = "none";
+            state.candidates = 0;
+            state.hiddenCandidates = 0;
             state.placement = {
               anchored: false,
               offset: { ...state.placement.offset },
@@ -225,9 +283,14 @@ var control_ui_default = defineControlUiPlugin({
             top: target.top,
             anchor: target.label
           };
+          state.reason = target.label;
+          state.candidates = target.candidates;
+          state.hiddenCandidates = target.hiddenCandidates;
           if (applied.left === target.left && applied.top === target.top && container.style.position === "fixed") {
             return;
           }
+          state.places += 1;
+          state.lastPlaceAt = Date.now();
           applied.left = target.left;
           applied.top = target.top;
           container.style.position = "fixed";
@@ -235,20 +298,31 @@ var control_ui_default = defineControlUiPlugin({
           container.style.top = `${target.top}px`;
           container.style.zIndex = String(Z_INDEX);
         };
+        const safePlace = () => {
+          try {
+            place();
+          } catch (error) {
+            state.placementError = error instanceof Error ? error.message : String(error);
+            console.warn(`[${PLUGIN_ID}] \u5B9A\u4F4D\u5931\u8D25\uFF1A${state.placementError}`);
+          }
+        };
         const POLL_MS = 250;
         const BURST_MS = 800;
         let lastSync = 0;
         let burstUntil = 0;
         const follow = () => {
           burstUntil = Date.now() + BURST_MS;
+          safePlace();
         };
         const loop = () => {
           if (disposed) return;
           frame = requestAnimationFrame(loop);
           const now = Date.now();
+          state.loopTicks += 1;
+          state.lastLoopAt = now;
           if (now < burstUntil || now - lastSync >= POLL_MS) {
             lastSync = now;
-            place();
+            safePlace();
           }
         };
         const render = () => {
@@ -289,7 +363,7 @@ var control_ui_default = defineControlUiPlugin({
             probeTimer = void 0;
             return;
           }
-          place();
+          safePlace();
           hitTest();
         };
         const startProbe = () => {
@@ -299,7 +373,7 @@ var control_ui_default = defineControlUiPlugin({
           requestAnimationFrame(tick);
         };
         const reposition = () => {
-          place();
+          safePlace();
           follow();
         };
         const readState = async () => {
@@ -368,6 +442,13 @@ var control_ui_default = defineControlUiPlugin({
         window.visualViewport?.addEventListener("scroll", onLayout);
         const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => follow()) : void 0;
         observer?.observe(document.documentElement);
+        const WATCHDOG_MS = 400;
+        const watchdog = setInterval(() => {
+          if (disposed) return;
+          safePlace();
+        }, WATCHDOG_MS);
+        document.addEventListener("visibilitychange", onLayout);
+        window.addEventListener("pageshow", onLayout);
         render();
         startProbe();
         void readState();
@@ -397,8 +478,11 @@ var control_ui_default = defineControlUiPlugin({
           dispose() {
             disposed = true;
             if (probeTimer) clearInterval(probeTimer);
+            clearInterval(watchdog);
             if (frame) cancelAnimationFrame(frame);
             observer?.disconnect();
+            document.removeEventListener("visibilitychange", onLayout);
+            window.removeEventListener("pageshow", onLayout);
             window.removeEventListener("resize", onLayout);
             window.removeEventListener("scroll", onLayout, { capture: true });
             document.removeEventListener("fullscreenchange", onLayout);

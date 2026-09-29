@@ -34,6 +34,9 @@ const DEFAULT_OFFSET = { x: 61, y: 24 };
 const DEFAULT_GAP = 16;
 /** Admission-control labels (the row control the switch sits after). */
 const ADMISSION_LABEL = /完全访问|只读|保护|工作区|Full access|Read-only|Guarded|Workspace/;
+/** The host stacks cached chat panes in one grid cell at `opacity: 0`. */
+const PANE_SELECTOR = ".chat-pane-cache__pane";
+const PANE_VISIBLE_CLASS = "chat-pane-cache__pane--visible";
 
 type Offset = { x: number; y: number };
 
@@ -55,6 +58,16 @@ type Probe = {
   errorKind: "read" | "write" | null;
   writes: number;
   updatedAt: number | null;
+  /** Follow-loop diagnostics: is the animation-frame loop still running? */
+  loopTicks: number;
+  lastLoopAt: number | null;
+  /** Placement diagnostics: what the last sync resolved to. */
+  places: number;
+  lastPlaceAt: number | null;
+  reason: "none" | "after-admission" | "composer-offset";
+  candidates: number;
+  hiddenCandidates: number;
+  placementError: string | null;
 };
 
 type ProbeRegistry = {
@@ -112,6 +125,14 @@ function registry(): ProbeRegistry {
     errorKind: null,
     writes: 0,
     updatedAt: null,
+    loopTicks: 0,
+    lastLoopAt: null,
+    places: 0,
+    lastPlaceAt: null,
+    reason: "none",
+    candidates: 0,
+    hiddenCandidates: 0,
+    placementError: null,
   };
   const elements: HTMLElement[] = [];
   const entry: ProbeRegistry = {
@@ -151,18 +172,62 @@ function describe(element: Element | null): string | null {
   return `${tag}${id}${cls}`;
 }
 
+function isReallyVisible(element: Element): boolean {
+  const probe = element as Element & {
+    checkVisibility?: (options?: { checkOpacity?: boolean }) => boolean;
+  };
+  if (typeof probe.checkVisibility === "function") {
+    try {
+      return probe.checkVisibility({ checkOpacity: true });
+    } catch {
+      // Older engines reject the options bag; fall through to the manual walk.
+    }
+  }
+  let node: Element | null = element;
+  for (let depth = 0; node && depth < 40; depth += 1) {
+    const style = window.getComputedStyle(node);
+    if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0") {
+      return false;
+    }
+    node = node.parentElement;
+  }
+  return true;
+}
+
 function findPlacement(
+  container: HTMLElement,
   button: HTMLElement,
   offset: Offset,
   cached: { admission: Element | null; at: number },
-): { left: number; top: number; label: string; box: HTMLElement; anchor: Element | null } | null {
+): { left: number; top: number; label: "after-admission" | "composer-offset"; box: HTMLElement; anchor: Element | null; candidates: number; hiddenCandidates: number } | null {
   const areas = Array.from(document.querySelectorAll("textarea")).filter((element) => {
     const rect = element.getBoundingClientRect();
     return rect.width > 120 && rect.height > 0 && element.offsetParent !== null;
   });
   if (areas.length === 0) return null;
-  areas.sort((a, b) => b.getBoundingClientRect().width - a.getBoundingClientRect().width);
-  const textarea = areas[0];
+
+  // A cached pane's composer keeps a real box (the pane is only translucent), so
+  // the geometry filter above cannot tell it apart from the composer on screen.
+  // Picking the widest textarea outright therefore latched onto a hidden pane's
+  // composer, which never moves while the composer the owner is looking at does:
+  // the switch looked correctly placed and then froze. Rank the pane that owns
+  // this accessory first, then genuinely visible composers, then width.
+  const ownPane = container.closest(PANE_SELECTOR);
+  const ranked = areas
+    .map((element) => ({
+      element,
+      width: element.getBoundingClientRect().width,
+      visible: isReallyVisible(element),
+      samePane: ownPane !== null && element.closest(PANE_SELECTOR) === ownPane,
+    }))
+    .sort((a, b) => {
+      if (a.samePane !== b.samePane) return a.samePane ? -1 : 1;
+      if (a.visible !== b.visible) return a.visible ? -1 : 1;
+      return b.width - a.width;
+    });
+  const textarea = ranked[0].element;
+  const candidates = ranked.length;
+  const hiddenCandidates = ranked.filter((candidate) => !candidate.visible).length;
 
   let box = textarea.getBoundingClientRect();
   let node: HTMLElement = textarea;
@@ -215,9 +280,19 @@ function findPlacement(
       label: "after-admission",
       box: node,
       anchor: admission,
+      candidates,
+      hiddenCandidates,
     };
   }
-  return { left: Math.round(box.left + offset.x), top, label: "composer-offset", box: node, anchor: null };
+  return {
+    left: Math.round(box.left + offset.x),
+    top,
+    label: "composer-offset",
+    box: node,
+    anchor: null,
+    candidates,
+    hiddenCandidates,
+  };
 }
 
 export default defineControlUiPlugin({
@@ -283,11 +358,22 @@ export default defineControlUiPlugin({
             container.style.display = "none";
             return;
           }
+          // A cached pane keeps its DOM (and its accessory) mounted at opacity 0:
+          // its switch would sit invisible behind the active pane, so skip it
+          // instead of painting a control nobody can see or click.
+          const ownPane = container.closest(PANE_SELECTOR);
+          if (ownPane && !ownPane.classList.contains(PANE_VISIBLE_CLASS)) {
+            container.style.display = "none";
+            return;
+          }
           container.style.display = "";
-          const target = findPlacement(button, state.placement.offset, admissionCache);
+          const target = findPlacement(container, button, state.placement.offset, admissionCache);
           if (!target) {
             applied.left = Number.NaN;
             applied.top = Number.NaN;
+            state.reason = "none";
+            state.candidates = 0;
+            state.hiddenCandidates = 0;
             state.placement = {
               anchored: false,
               offset: { ...state.placement.offset },
@@ -323,15 +409,32 @@ export default defineControlUiPlugin({
             top: target.top,
             anchor: target.label,
           };
+          state.reason = target.label;
+          state.candidates = target.candidates;
+          state.hiddenCandidates = target.hiddenCandidates;
           if (applied.left === target.left && applied.top === target.top && container.style.position === "fixed") {
             return;
           }
+          state.places += 1;
+          state.lastPlaceAt = Date.now();
           applied.left = target.left;
           applied.top = target.top;
           container.style.position = "fixed";
           container.style.left = `${target.left}px`;
           container.style.top = `${target.top}px`;
           container.style.zIndex = String(Z_INDEX);
+        };
+
+        // A placement must never be able to kill the follow loop: a throw here
+        // would otherwise escape every animation frame and leave the switch
+        // frozen at whatever coordinate it last wrote.
+        const safePlace = () => {
+          try {
+            place();
+          } catch (error) {
+            state.placementError = error instanceof Error ? error.message : String(error);
+            console.warn(`[${PLUGIN_ID}] 定位失败：${state.placementError}`);
+          }
         };
 
         // Continuous alignment: a low-frequency poll keeps the control locked to
@@ -345,14 +448,20 @@ export default defineControlUiPlugin({
         let burstUntil = 0;
         const follow = () => {
           burstUntil = Date.now() + BURST_MS;
+          // Place straight away on the signal itself instead of waiting for the
+          // next animation frame: a stalled or throttled rAF loop then cannot
+          // freeze the switch at a stale coordinate.
+          safePlace();
         };
         const loop = () => {
           if (disposed) return;
           frame = requestAnimationFrame(loop);
           const now = Date.now();
+          state.loopTicks += 1;
+          state.lastLoopAt = now;
           if (now < burstUntil || now - lastSync >= POLL_MS) {
             lastSync = now;
-            place();
+            safePlace();
           }
         };
 
@@ -398,7 +507,7 @@ export default defineControlUiPlugin({
             probeTimer = undefined;
             return;
           }
-          place();
+          safePlace();
           hitTest();
         };
 
@@ -410,7 +519,7 @@ export default defineControlUiPlugin({
         };
 
         const reposition = () => {
-          place();
+          safePlace();
           follow();
         };
 
@@ -491,6 +600,18 @@ export default defineControlUiPlugin({
           typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => follow()) : undefined;
         observer?.observe(document.documentElement);
 
+        // Belt and braces for the follow loop: a plain timer keeps re-placing
+        // even when no animation frame arrives (throttled/backgrounded rAF, a
+        // frame budget stall), so the switch can never sit frozen while its
+        // composer has moved.
+        const WATCHDOG_MS = 400;
+        const watchdog = setInterval(() => {
+          if (disposed) return;
+          safePlace();
+        }, WATCHDOG_MS);
+        document.addEventListener("visibilitychange", onLayout);
+        window.addEventListener("pageshow", onLayout);
+
         render();
         startProbe();
         void readState();
@@ -524,8 +645,11 @@ export default defineControlUiPlugin({
           dispose() {
             disposed = true;
             if (probeTimer) clearInterval(probeTimer);
+            clearInterval(watchdog);
             if (frame) cancelAnimationFrame(frame);
             observer?.disconnect();
+            document.removeEventListener("visibilitychange", onLayout);
+            window.removeEventListener("pageshow", onLayout);
             window.removeEventListener("resize", onLayout);
             window.removeEventListener("scroll", onLayout, { capture: true } as EventListenerOptions);
             document.removeEventListener("fullscreenchange", onLayout);

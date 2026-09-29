@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+- Keep the switch following even when the animation-frame loop stalls. The
+  1.5.0 follow loop re-placed only from `requestAnimationFrame`, so a stalled or
+  throttled rAF (or a long frame) left the switch frozen at the coordinate of
+  its first successful placement — the reported symptom was a correctly placed
+  switch on a freshly opened session page that then stopped moving with its
+  composer. Any layout signal now places immediately instead of only arming a
+  burst, a 400 ms timer watchdog re-places independently of rAF, `place()` is
+  exception-guarded so it can never kill the loop, and `visibilitychange` /
+  `pageshow` re-sync too.
+- The probe (`window.__openclawTypedDecisions.probe()`) now reports `loopTicks`
+  / `lastLoopAt`, `places` / `lastPlaceAt`, `reason`, `candidates` and
+  `placementError`, so a stalled follow loop is distinguishable in one reading
+  from a wrong anchor, without console access to the page.
+
 ## 1.5.0
 
 - Follow the toolbar continuously instead of only on window resize. A low-frequency
