@@ -1,49 +1,44 @@
 # Changelog
 
-## Unreleased
+## 1.5.1
 
-- Keep the horizontal anchor on the access-mode chip instead of a container that
-  merely wraps it. The chip lookup matched only `button`/`span`/`div` and then
-  took the narrowest hit; on a freshly opened session page the chip is rendered
-  through a custom element, so the narrowest hit collapsed to a full-width row
-  whose right edge is the composer's own right edge — and `right + 16` parked the
-  switch just outside the composer until the next reload. The lookup now matches
-  every element, keeps only the tightest (non-nesting) hits, prefers the chip's
-  own control, and the final position is clamped inside the composer shell so a
-  stray wrapper can never push the control out of the box.
-- Scope the composer box and the toolbar-control lookup to the composer's own
-  shell (`.agent-chat__composer-shell`). The box used to be found by walking up
-  from the textarea: on a settled chat pane that stops at the shell, but on a
-  freshly opened session page the shell's ancestor (the draft/launcher column)
-  measures as wide as the shell, so the walk climbed into a page container.
-- Place from a post-layout hook. A sidebar drag changes the composer's horizontal
-  position without changing its size (the shell is capped by `max-width`), so no
-  resize callback fired and the switch waited for the frame loop — whose
-  callback measures the previous frame's layout and therefore painted one frame
-  behind the composer. The plugin now observes the ancestor whose width actually
-  tracks the pane (via `widerAncestor`) and places from that callback, which runs
-  after layout and before paint. Scrolling places straight away too, since the
-  scroll offset is already applied when the event fires.
-- Follow at frame rate instead of on a signal-triggered burst. The composer
-  shell and the anchored control are measured every frame and a full placement
-  runs only when that geometry actually moved (plus a 250 ms poll as a
-  backstop); layout signals just mark the geometry stale, so a window drag can
-  no longer stack a synchronous placement on top of the frame pass (which forced
-  layout mid-event and read as lag), and the switch no longer waits for a signal
-  to catch up with a moving composer.
-- Keep the switch following even when the animation-frame loop stalls. The
-  1.5.0 follow loop re-placed only from `requestAnimationFrame`, so a stalled or
-  throttled rAF (or a long frame) left the switch frozen at the coordinate of
-  its first successful placement — the reported symptom was a correctly placed
-  switch on a freshly opened session page that then stopped moving with its
-  composer. Any layout signal now places immediately instead of only arming a
-  burst, a 400 ms timer watchdog re-places independently of rAF, `place()` is
-  exception-guarded so it can never kill the loop, and `visibilitychange` /
-  `pageshow` re-sync too.
-- The probe (`window.__openclawTypedDecisions.probe()`) now reports `loopTicks`
-  / `lastLoopAt`, `places` / `lastPlaceAt`, `reason`, `candidates` and
-  `placementError`, so a stalled follow loop is distinguishable in one reading
-  from a wrong anchor, without console access to the page.
+Targets OpenClaw 2026.9.6.
+
+- Keep the switch on screen: rank the pane that owns the accessory first, then
+  genuinely visible composers (`checkVisibility({ checkOpacity: true })`, with a
+  computed-style opacity walk as a fallback), then width. The Control UI keeps
+  whole chat panes mounted in `.chat-pane-cache`, stacked in one grid cell at
+  `opacity: 0`, so a cached pane's composer keeps a real box and used to capture
+  the anchor — the switch was placed correctly once and then froze while the
+  composer on screen moved. An accessory whose own pane is cached stays hidden.
+- Keep the horizontal anchor inside the composer. The access-mode chip lookup
+  matched only `button`/`span`/`div` and took the narrowest hit; on a freshly
+  opened session page the chip renders through a custom element, so the narrowest
+  hit collapsed to a full-width row whose right edge is the composer's own right
+  edge, and `right + 16` parked the switch just outside it until the next reload.
+  The lookup now matches every element, keeps only the tightest (non-nesting)
+  hits, prefers the chip's own control, and the final position is clamped inside
+  the composer shell; the composer box and the control lookup are scoped to
+  `.agent-chat__composer-shell` instead of walking up from the textarea into a
+  page container.
+- Place from a post-layout hook. A sidebar drag moves the composer without
+  resizing it (the shell is capped by `max-width`), so no resize callback fired
+  and the switch waited for the animation-frame loop, whose callback measures the
+  previous frame's layout and therefore painted a frame behind the composer.
+  Observe the ancestor whose width actually tracks the pane and place from that
+  callback (after layout, before paint); scrolling places straight away.
+- Follow at frame rate instead of on a signal-triggered burst: the composer shell
+  and the anchored control are measured each frame and a full placement runs only
+  when that geometry actually moved, with a 250 ms poll as a backstop. Layout
+  signals only mark the geometry stale, so a window drag cannot stack a
+  synchronous placement on top of the frame pass. Visibility probes are skipped
+  when only one composer is on screen.
+- Keep following even if the animation-frame loop stalls: `place()` is
+  exception-guarded, a 400 ms timer watchdog re-places independently of rAF, and
+  `visibilitychange` / `pageshow` re-sync.
+- The probe (`window.__openclawTypedDecisions.probe()`) additionally reports
+  `loopTicks` / `lastLoopAt`, `places` / `lastPlaceAt`, `reason`, `candidates`,
+  `hiddenCandidates`, `anchorDetail` and `placementError`.
 
 ## 1.5.0
 
