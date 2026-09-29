@@ -198,6 +198,21 @@ function isReallyVisible(element: Element): boolean {
   return true;
 }
 
+/**
+ * The nearest ancestor whose width tracks the pane/Сside panel (the composer
+ * shell itself is capped by `max-width`, so a sidebar drag moves it without
+ * resizing it).
+ */
+function widerAncestor(element: HTMLElement): HTMLElement | null {
+  const width = element.getBoundingClientRect().width;
+  let node: HTMLElement | null = element.parentElement;
+  for (let depth = 0; node && depth < 4; depth += 1) {
+    if (node.getBoundingClientRect().width > width + 1) return node;
+    node = node.parentElement;
+  }
+  return node;
+}
+
 function findPlacement(
   container: HTMLElement,
   button: HTMLElement,
@@ -404,6 +419,7 @@ export default defineControlUiPlugin({
         const applied = { left: Number.NaN, top: Number.NaN };
         let observedBox: HTMLElement | null = null;
         let observedAnchor: Element | null = null;
+        let observedContainer: HTMLElement | null = null;
         const place = () => {
           if (disposed) return;
           if (!presented) {
@@ -453,6 +469,17 @@ export default defineControlUiPlugin({
             if (observedAnchor) observer?.unobserve(observedAnchor);
             observedAnchor = target.anchor;
             if (target.anchor) observer?.observe(target.anchor);
+          }
+          // Watch the element whose width actually tracks a sidebar drag. The
+          // resize observer runs after layout and before paint, so placing from
+          // its callback puts the switch in the same frame as the composer's new
+          // position — frame-loop placement is a frame behind, because an
+          // animation-frame callback measures the layout of the frame before.
+          const paneObserverTarget = widerAncestor(target.box);
+          if (paneObserverTarget !== observedContainer) {
+            if (observedContainer) observer?.unobserve(observedContainer);
+            observedContainer = paneObserverTarget;
+            if (paneObserverTarget) observer?.observe(paneObserverTarget);
           }
 
           state.placement = {
@@ -654,13 +681,19 @@ export default defineControlUiPlugin({
         });
         button.addEventListener("td:reposition", reposition);
         const onLayout = () => follow();
+        // Scrolling moves the composer without resizing anything and the scroll
+        // offset is already applied when the event fires, so place straight
+        // away; it costs no forced layout and keeps scrolling in sync.
+        const onScroll = () => syncNow();
         window.addEventListener("resize", onLayout);
-        window.addEventListener("scroll", onLayout, { passive: true, capture: true });
+        window.addEventListener("scroll", onScroll, { passive: true, capture: true });
         document.addEventListener("fullscreenchange", onLayout);
         window.visualViewport?.addEventListener("resize", onLayout);
-        window.visualViewport?.addEventListener("scroll", onLayout);
+        window.visualViewport?.addEventListener("scroll", onScroll);
+        // Post-layout hook: a resize observer callback is the one place that runs
+        // after the browser has laid the frame out and before it paints it.
         const observer =
-          typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => follow()) : undefined;
+          typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => syncNow()) : undefined;
         observer?.observe(document.documentElement);
 
         // Belt and braces for the follow loop: a plain timer keeps re-placing
@@ -715,10 +748,10 @@ export default defineControlUiPlugin({
             document.removeEventListener("visibilitychange", onLayout);
             window.removeEventListener("pageshow", onLayout);
             window.removeEventListener("resize", onLayout);
-            window.removeEventListener("scroll", onLayout, { capture: true } as EventListenerOptions);
+            window.removeEventListener("scroll", onScroll, { capture: true } as EventListenerOptions);
             document.removeEventListener("fullscreenchange", onLayout);
             window.visualViewport?.removeEventListener("resize", onLayout);
-            window.visualViewport?.removeEventListener("scroll", onLayout);
+            window.visualViewport?.removeEventListener("scroll", onScroll);
             probe.drop(button);
             state.mounted = probe.elements().length > 0;
             button.remove();

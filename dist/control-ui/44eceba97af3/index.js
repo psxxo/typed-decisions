@@ -117,6 +117,15 @@ function isReallyVisible(element) {
   }
   return true;
 }
+function widerAncestor(element) {
+  const width = element.getBoundingClientRect().width;
+  let node = element.parentElement;
+  for (let depth = 0; node && depth < 4; depth += 1) {
+    if (node.getBoundingClientRect().width > width + 1) return node;
+    node = node.parentElement;
+  }
+  return node;
+}
 function findPlacement(container, button, offset, cached) {
   const areas = Array.from(document.querySelectorAll("textarea")).filter((element) => {
     const rect = element.getBoundingClientRect();
@@ -257,6 +266,7 @@ var control_ui_default = defineControlUiPlugin({
         const applied = { left: Number.NaN, top: Number.NaN };
         let observedBox = null;
         let observedAnchor = null;
+        let observedContainer = null;
         const place = () => {
           if (disposed) return;
           if (!presented) {
@@ -299,6 +309,12 @@ var control_ui_default = defineControlUiPlugin({
             if (observedAnchor) observer?.unobserve(observedAnchor);
             observedAnchor = target.anchor;
             if (target.anchor) observer?.observe(target.anchor);
+          }
+          const paneObserverTarget = widerAncestor(target.box);
+          if (paneObserverTarget !== observedContainer) {
+            if (observedContainer) observer?.unobserve(observedContainer);
+            observedContainer = paneObserverTarget;
+            if (paneObserverTarget) observer?.observe(paneObserverTarget);
           }
           state.placement = {
             anchored: true,
@@ -468,12 +484,13 @@ var control_ui_default = defineControlUiPlugin({
         });
         button.addEventListener("td:reposition", reposition);
         const onLayout = () => follow();
+        const onScroll = () => syncNow();
         window.addEventListener("resize", onLayout);
-        window.addEventListener("scroll", onLayout, { passive: true, capture: true });
+        window.addEventListener("scroll", onScroll, { passive: true, capture: true });
         document.addEventListener("fullscreenchange", onLayout);
         window.visualViewport?.addEventListener("resize", onLayout);
-        window.visualViewport?.addEventListener("scroll", onLayout);
-        const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => follow()) : void 0;
+        window.visualViewport?.addEventListener("scroll", onScroll);
+        const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => syncNow()) : void 0;
         observer?.observe(document.documentElement);
         const WATCHDOG_MS = 400;
         const watchdog = setInterval(() => {
@@ -518,10 +535,10 @@ var control_ui_default = defineControlUiPlugin({
             document.removeEventListener("visibilitychange", onLayout);
             window.removeEventListener("pageshow", onLayout);
             window.removeEventListener("resize", onLayout);
-            window.removeEventListener("scroll", onLayout, { capture: true });
+            window.removeEventListener("scroll", onScroll, { capture: true });
             document.removeEventListener("fullscreenchange", onLayout);
             window.visualViewport?.removeEventListener("resize", onLayout);
-            window.visualViewport?.removeEventListener("scroll", onLayout);
+            window.visualViewport?.removeEventListener("scroll", onScroll);
             probe.drop(button);
             state.mounted = probe.elements().length > 0;
             button.remove();

@@ -16,6 +16,14 @@
   from the textarea: on a settled chat pane that stops at the shell, but on a
   freshly opened session page the shell's ancestor (the draft/launcher column)
   measures as wide as the shell, so the walk climbed into a page container.
+- Place from a post-layout hook. A sidebar drag changes the composer's horizontal
+  position without changing its size (the shell is capped by `max-width`), so no
+  resize callback fired and the switch waited for the frame loop — whose
+  callback measures the previous frame's layout and therefore painted one frame
+  behind the composer. The plugin now observes the ancestor whose width actually
+  tracks the pane (via `widerAncestor`) and places from that callback, which runs
+  after layout and before paint. Scrolling places straight away too, since the
+  scroll offset is already applied when the event fires.
 - Follow at frame rate instead of on a signal-triggered burst. The composer
   shell and the anchored control are measured every frame and a full placement
   runs only when that geometry actually moved (plus a 250 ms poll as a
