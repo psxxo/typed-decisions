@@ -69,6 +69,7 @@ type Probe = {
   reason: "none" | "after-admission" | "composer-offset";
   candidates: number;
   hiddenCandidates: number;
+  anchorDetail: string | null;
   placementError: string | null;
 };
 
@@ -134,6 +135,7 @@ function registry(): ProbeRegistry {
     reason: "none",
     candidates: 0,
     hiddenCandidates: 0,
+    anchorDetail: null,
     placementError: null,
   };
   const elements: HTMLElement[] = [];
@@ -201,7 +203,7 @@ function findPlacement(
   button: HTMLElement,
   offset: Offset,
   cached: { admission: Element | null; at: number },
-): { left: number; top: number; label: "after-admission" | "composer-offset"; box: HTMLElement; anchor: Element | null; candidates: number; hiddenCandidates: number } | null {
+): { left: number; top: number; label: "after-admission" | "composer-offset"; box: HTMLElement; anchor: Element | null; candidates: number; hiddenCandidates: number; anchorDetail: string | null } | null {
   const areas = Array.from(document.querySelectorAll("textarea")).filter((element) => {
     const rect = element.getBoundingClientRect();
     return rect.width > 120 && rect.height > 0 && element.offsetParent !== null;
@@ -215,18 +217,24 @@ function findPlacement(
   // the switch looked correctly placed and then froze. Rank the pane that owns
   // this accessory first, then genuinely visible composers, then width.
   const ownPane = container.closest(PANE_SELECTOR);
-  const ranked = areas
-    .map((element) => ({
-      element,
-      width: element.getBoundingClientRect().width,
-      visible: isReallyVisible(element),
-      samePane: ownPane !== null && element.closest(PANE_SELECTOR) === ownPane,
-    }))
-    .sort((a, b) => {
-      if (a.samePane !== b.samePane) return a.samePane ? -1 : 1;
-      if (a.visible !== b.visible) return a.visible ? -1 : 1;
-      return b.width - a.width;
-    });
+  // The common case is exactly one composer on screen; skip the visibility
+  // probes then — each one costs a style walk, and running them per candidate on
+  // every placement showed up as lag while dragging the window.
+  const ranked =
+    areas.length === 1
+      ? [{ element: areas[0], width: 0, visible: true, samePane: true }]
+      : areas
+          .map((element) => ({
+            element,
+            width: element.getBoundingClientRect().width,
+            visible: isReallyVisible(element),
+            samePane: ownPane !== null && element.closest(PANE_SELECTOR) === ownPane,
+          }))
+          .sort((a, b) => {
+            if (a.samePane !== b.samePane) return a.samePane ? -1 : 1;
+            if (a.visible !== b.visible) return a.visible ? -1 : 1;
+            return b.width - a.width;
+          });
   const textarea = ranked[0].element;
   const candidates = ranked.length;
   const hiddenCandidates = ranked.filter((candidate) => !candidate.visible).length;
@@ -276,35 +284,66 @@ function findPlacement(
     admission = null;
     if (Date.now() - cached.at > 2000) {
       cached.at = Date.now();
-      const candidates = Array.from(node.querySelectorAll("button, span, div")).filter((element) => {
+      // The Control UI renders some chips through custom elements, so match on
+      // every element and keep only the tightest matches: a container that
+      // merely wraps the chip must never capture the anchor, or the switch
+      // lands at the container's right edge — outside the composer.
+      const matches = Array.from(node.querySelectorAll("*")).filter((element) => {
         const text = (element.textContent ?? "").trim();
-        return text.length > 0 && ADMISSION_LABEL.test(text) && isVisible(element);
+        return text.length > 0 && ADMISSION_LABEL.test(text);
       });
-      candidates.sort((a, b) => a.getBoundingClientRect().width - b.getBoundingClientRect().width);
-      admission = candidates[0] ?? null;
+      const tightest = matches.filter(
+        (element) => !matches.some((other) => other !== element && element.contains(other)),
+      );
+      tightest.sort((a, b) => a.getBoundingClientRect().width - b.getBoundingClientRect().width);
+      for (const candidate of tightest) {
+        const control = (candidate.closest("button, [role='button']") ?? candidate) as Element;
+        const anchor = node.contains(control) ? control : candidate;
+        if (isVisible(anchor)) {
+          admission = anchor;
+          break;
+        }
+      }
       cached.admission = admission;
     }
   }
 
+  // Whatever the anchor resolved to, the control belongs inside the composer:
+  // clamp it, so a wrapper that slips through can never park the switch outside
+  // the box the owner is looking at.
+  const frame = (shell ?? node).getBoundingClientRect();
+  const clamp = (value: number, min: number, max: number) =>
+    Math.round(Math.min(Math.max(value, min), Math.max(min, max)));
+  const rawLeft = admission
+    ? Math.round(admission.getBoundingClientRect().right + DEFAULT_GAP)
+    : Math.round(box.left + offset.x);
+  const left = clamp(rawLeft, frame.left + 4, frame.right - own.width - 4);
+  const placementTop = clamp(top, frame.top, frame.bottom - own.height);
+  const anchorDetail = admission
+    ? `${describe(admission)} right=${Math.round(admission.getBoundingClientRect().right)}`
+    : null;
+
   if (admission) {
     return {
-      left: Math.round(admission.getBoundingClientRect().right + DEFAULT_GAP),
-      top,
+      left,
+      top: placementTop,
       label: "after-admission",
       box: node,
       anchor: admission,
       candidates,
       hiddenCandidates,
+      anchorDetail,
     };
   }
   return {
-    left: Math.round(box.left + offset.x),
-    top,
+    left,
+    top: placementTop,
     label: "composer-offset",
     box: node,
     anchor: null,
     candidates,
     hiddenCandidates,
+    anchorDetail,
   };
 }
 
@@ -387,6 +426,7 @@ export default defineControlUiPlugin({
             state.reason = "none";
             state.candidates = 0;
             state.hiddenCandidates = 0;
+            state.anchorDetail = null;
             state.placement = {
               anchored: false,
               offset: { ...state.placement.offset },
@@ -425,6 +465,7 @@ export default defineControlUiPlugin({
           state.reason = target.label;
           state.candidates = target.candidates;
           state.hiddenCandidates = target.hiddenCandidates;
+          state.anchorDetail = target.anchorDetail;
           if (applied.left === target.left && applied.top === target.top && container.style.position === "fixed") {
             return;
           }
@@ -460,11 +501,13 @@ export default defineControlUiPlugin({
         let lastSync = 0;
         let burstUntil = 0;
         const follow = () => {
-          burstUntil = Date.now() + BURST_MS;
-          // Place straight away on the signal itself instead of waiting for the
-          // next animation frame: a stalled or throttled rAF loop then cannot
-          // freeze the switch at a stale coordinate.
-          safePlace();
+          const now = Date.now();
+          // Place on the first signal of a burst; while a burst is already
+          // running the per-frame pass covers the rest, so a signal must not add
+          // a second full placement per event — a window drag fires resize at
+          // frame rate, and that doubled the work per frame.
+          if (now >= burstUntil) safePlace();
+          burstUntil = now + BURST_MS;
         };
         const loop = () => {
           if (disposed) return;

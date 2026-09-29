@@ -2,13 +2,25 @@
 
 ## Unreleased
 
+- Keep the horizontal anchor on the access-mode chip instead of a container that
+  merely wraps it. The chip lookup matched only `button`/`span`/`div` and then
+  took the narrowest hit; on a freshly opened session page the chip is rendered
+  through a custom element, so the narrowest hit collapsed to a full-width row
+  whose right edge is the composer's own right edge — and `right + 16` parked the
+  switch just outside the composer until the next reload. The lookup now matches
+  every element, keeps only the tightest (non-nesting) hits, prefers the chip's
+  own control, and the final position is clamped inside the composer shell so a
+  stray wrapper can never push the control out of the box.
 - Scope the composer box and the toolbar-control lookup to the composer's own
   shell (`.agent-chat__composer-shell`). The box used to be found by walking up
   from the textarea: on a settled chat pane that stops at the shell, but on a
   freshly opened session page the shell's ancestor (the draft/launcher column)
-  measures as wide as the shell, so the walk climbed into a page container and
-  the control lookup latched onto an element outside the composer — parking the
-  switch past the composer's right edge until the next reload.
+  measures as wide as the shell, so the walk climbed into a page container.
+- Stop re-placing twice per frame: a layout signal now places immediately only
+  when no burst is already running (a window drag fires resize at frame rate, and
+  the synchronous placement inside the event added jank), and the visibility
+  probes are skipped entirely when only one composer is on screen, instead of
+  running a style walk per candidate per placement.
 - Keep the switch following even when the animation-frame loop stalls. The
   1.5.0 follow loop re-placed only from `requestAnimationFrame`, so a stalled or
   throttled rAF (or a long frame) left the switch frozen at the coordinate of

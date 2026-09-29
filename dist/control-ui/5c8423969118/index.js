@@ -63,6 +63,7 @@ function registry() {
     reason: "none",
     candidates: 0,
     hiddenCandidates: 0,
+    anchorDetail: null,
     placementError: null
   };
   const elements = [];
@@ -123,7 +124,7 @@ function findPlacement(container, button, offset, cached) {
   });
   if (areas.length === 0) return null;
   const ownPane = container.closest(PANE_SELECTOR);
-  const ranked = areas.map((element) => ({
+  const ranked = areas.length === 1 ? [{ element: areas[0], width: 0, visible: true, samePane: true }] : areas.map((element) => ({
     element,
     width: element.getBoundingClientRect().width,
     visible: isReallyVisible(element),
@@ -164,34 +165,52 @@ function findPlacement(container, button, offset, cached) {
     admission = null;
     if (Date.now() - cached.at > 2e3) {
       cached.at = Date.now();
-      const candidates2 = Array.from(node.querySelectorAll("button, span, div")).filter((element) => {
+      const matches = Array.from(node.querySelectorAll("*")).filter((element) => {
         const text = (element.textContent ?? "").trim();
-        return text.length > 0 && ADMISSION_LABEL.test(text) && isVisible(element);
+        return text.length > 0 && ADMISSION_LABEL.test(text);
       });
-      candidates2.sort((a, b) => a.getBoundingClientRect().width - b.getBoundingClientRect().width);
-      admission = candidates2[0] ?? null;
+      const tightest = matches.filter(
+        (element) => !matches.some((other) => other !== element && element.contains(other))
+      );
+      tightest.sort((a, b) => a.getBoundingClientRect().width - b.getBoundingClientRect().width);
+      for (const candidate of tightest) {
+        const control = candidate.closest("button, [role='button']") ?? candidate;
+        const anchor = node.contains(control) ? control : candidate;
+        if (isVisible(anchor)) {
+          admission = anchor;
+          break;
+        }
+      }
       cached.admission = admission;
     }
   }
+  const frame = (shell ?? node).getBoundingClientRect();
+  const clamp = (value, min, max) => Math.round(Math.min(Math.max(value, min), Math.max(min, max)));
+  const rawLeft = admission ? Math.round(admission.getBoundingClientRect().right + DEFAULT_GAP) : Math.round(box.left + offset.x);
+  const left = clamp(rawLeft, frame.left + 4, frame.right - own.width - 4);
+  const placementTop = clamp(top, frame.top, frame.bottom - own.height);
+  const anchorDetail = admission ? `${describe(admission)} right=${Math.round(admission.getBoundingClientRect().right)}` : null;
   if (admission) {
     return {
-      left: Math.round(admission.getBoundingClientRect().right + DEFAULT_GAP),
-      top,
+      left,
+      top: placementTop,
       label: "after-admission",
       box: node,
       anchor: admission,
       candidates,
-      hiddenCandidates
+      hiddenCandidates,
+      anchorDetail
     };
   }
   return {
-    left: Math.round(box.left + offset.x),
-    top,
+    left,
+    top: placementTop,
     label: "composer-offset",
     box: node,
     anchor: null,
     candidates,
-    hiddenCandidates
+    hiddenCandidates,
+    anchorDetail
   };
 }
 var control_ui_default = defineControlUiPlugin({
@@ -257,6 +276,7 @@ var control_ui_default = defineControlUiPlugin({
             state.reason = "none";
             state.candidates = 0;
             state.hiddenCandidates = 0;
+            state.anchorDetail = null;
             state.placement = {
               anchored: false,
               offset: { ...state.placement.offset },
@@ -290,6 +310,7 @@ var control_ui_default = defineControlUiPlugin({
           state.reason = target.label;
           state.candidates = target.candidates;
           state.hiddenCandidates = target.hiddenCandidates;
+          state.anchorDetail = target.anchorDetail;
           if (applied.left === target.left && applied.top === target.top && container.style.position === "fixed") {
             return;
           }
@@ -315,8 +336,9 @@ var control_ui_default = defineControlUiPlugin({
         let lastSync = 0;
         let burstUntil = 0;
         const follow = () => {
-          burstUntil = Date.now() + BURST_MS;
-          safePlace();
+          const now = Date.now();
+          if (now >= burstUntil) safePlace();
+          burstUntil = now + BURST_MS;
         };
         const loop = () => {
           if (disposed) return;
