@@ -19,6 +19,7 @@ import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { readFile, stat } from "node:fs/promises";
+import { registerSysStatusNudge } from "./src/sys-status-nudge.js";
 
 // Per-session 「决策介入」 state. The Control UI accessory writes it through the
 // host's `sessions.pluginPatch` method; the prompt hook below reads it and
@@ -74,6 +75,22 @@ function normalizeEndpoint(value) {
   return host || undefined;
 }
 
+/** sys-status nudge config: the lane stays off unless the operator supplies a widget data origin. */
+function normalizeSysStatus(raw) {
+  const value = raw && typeof raw === "object" ? raw : {};
+  const strings = (input) =>
+    Array.isArray(input)
+      ? input.filter((item) => typeof item === "string" && item.trim()).map((item) => item.trim())
+      : [];
+  return {
+    enabled: value.enabled !== false,
+    widgetPath:
+      typeof value.widgetPath === "string" && value.widgetPath.trim() ? value.widgetPath.trim() : undefined,
+    netOrigins: strings(value.netOrigins),
+    tools: strings(value.tools),
+  };
+}
+
 function normalizeConfig(raw) {
   const cfg = raw && typeof raw === "object" ? raw : {};
   const keyFile =
@@ -82,7 +99,13 @@ function normalizeConfig(raw) {
     typeof cfg.timeoutMs === "number" && Number.isFinite(cfg.timeoutMs) && cfg.timeoutMs > 0
       ? Math.min(cfg.timeoutMs, HOST_MAX_TIMEOUT_MS)
       : DEFAULT_TIMEOUT_MS;
-  return { credential: cfg.credential, keyFile, endpoint: normalizeEndpoint(cfg.endpoint), timeoutMs };
+  return {
+    credential: cfg.credential,
+    keyFile,
+    endpoint: normalizeEndpoint(cfg.endpoint),
+    timeoutMs,
+    sysStatus: normalizeSysStatus(cfg.sysStatus),
+  };
 }
 
 /** DecisionEntry -> plain text for the vendor rubric fields. */
@@ -318,6 +341,14 @@ export default definePluginEntry({
   description: "System One typed decision provider (choice / score / boolean) for the decisionModel role.",
   register(api) {
     const config = normalizeConfig(api.pluginConfig);
+
+    // sys-status dashboard widget nudge — hook-only, once per session, off
+    // unless the operator configured a widget data origin (sysStatus.netOrigins).
+    try {
+      registerSysStatusNudge(api, config.sysStatus);
+    } catch (error) {
+      api.logger?.warn?.(`[${PLUGIN_ID}] sys-status nudge unavailable: ${error?.message ?? error}`);
+    }
     const keyCache = { path: undefined, value: undefined, mtimeMs: 0, checkedAt: 0 };
 
     async function readKeyFile(path) {

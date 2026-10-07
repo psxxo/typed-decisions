@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.6.0
+
+Targets OpenClaw 2026.9.6.
+
+- Port the sys-status dashboard widget nudge from the retired `memory-lancedb-cip`
+  plugin: once per session the plugin asks the agent to pin the shared `sys-status`
+  widget on that session's board — hook-only (`agent_turn_prepare`), no other
+  capability, and it never touches the decision lanes.
+- Config-driven, no baked defaults: the nudge stays OFF until the operator sets
+  `sysStatus.netOrigins` (optional `sysStatus.tools`, `sysStatus.widgetPath`,
+  `sysStatus.enabled`). The widget HTML ships as `assets/sys-status-widget.html`.
 ## 1.5.1
 
 Targets OpenClaw 2026.9.6.
