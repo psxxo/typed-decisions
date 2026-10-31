@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.6.8
+
+Local build. Host: OpenClaw 2026.9.9.
+
+- Control UI accessory: appearance panel (font size; button X/Y; label X/Y; whole control X/Y), 0.1px steps, direct numeric entry, saved to localStorage
+- Anchoring: candidates restricted to the textarea's own row, so a task-progress card inside the composer no longer donates its buttons or text as anchors
+- Setup panel can be summoned by a one-shot flag file read through the session action, or toggled with Ctrl+Alt+D
+- Text and toggle move independently; the control's hit area no longer moves with the label
+
 ## 1.6.7
 
 Targets OpenClaw 2026.9.9.
