@@ -1,0 +1,93 @@
+{
+  "id": "typed-decisions",
+  "name": "Typed Decisions",
+  "version": "1.6.0",
+  "description": "System One typed decision provider: choice / score / boolean judgments with probability distributions for OpenClaw's decisionModel role.",
+  "categories": [
+    "other"
+  ],
+  "activation": {
+    "onStartup": true
+  },
+  "contracts": {
+    "decisionProviders": [
+      "typed-decisions"
+    ],
+    "tools": [
+      "typed_decide"
+    ]
+  },
+  "toolMetadata": {
+    "typed_decide": {
+      "optional": true
+    }
+  },
+  "decisionModels": [
+    {
+      "provider": "typed-decisions",
+      "id": "decision-model-preview",
+      "name": "Typed Decisions (preview)"
+    }
+  ],
+  "configContracts": {
+    "secretInputs": {
+      "paths": [
+        {
+          "path": "credential",
+          "expected": "string",
+          "ownerKind": "capability"
+        }
+      ]
+    }
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "endpoint": {
+        "type": "string",
+        "description": "System One endpoint host (required to serve decisions). Accepts a bare host or an origin URL; the plugin appends /compatible-mode/v1/systemone."
+      },
+      "keyFile": {
+        "type": "string",
+        "description": "Path to a file holding the provider credential (0600). Defaults to ~/.openclaw/.secrets/decision-model.key."
+      },
+      "credential": {
+        "type": "string",
+        "description": "Inline provider credential. Prefer keyFile; this value lives in config and is stored in plaintext unless supplied as a SecretRef."
+      },
+      "timeoutMs": {
+        "type": "number",
+        "description": "Per-request timeout in milliseconds (host caps the effective deadline at 30000). Default 20000."
+      },
+      "sysStatus": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Once-per-session nudge that has the agent pin the shared sys-status dashboard widget. Off unless netOrigins is configured.",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Set false to disable the nudge."
+          },
+          "widgetPath": {
+            "type": "string",
+            "description": "Path to the widget HTML fragment. Defaults to the packaged assets/sys-status-widget.html."
+          },
+          "netOrigins": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Exact HTTPS origins the widget may fetch. Required to enable the lane."
+          },
+          "tools": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Host tool bindings the widget may read (e.g. health, sessions.list, cron.list, agents.list)."
+          }
+        }
+      }
+    }
+  },
+  "controlUi": {
+    "entry": "dist/control-ui/44eceba97af3/index.js"
+  }
+}

@@ -35,6 +35,7 @@ if (sdkDir) {
   await ensureHostLink(sdkDir);
 }
 
+
 const result = await build({
   entryPoints: [sourcePath],
   bundle: true,

@@ -30,10 +30,58 @@ const PROBE_WINDOW_MS = 60_000;
 
 /** Distance from the composer box's left/bottom edges to the switch. */
 const DEFAULT_OFFSET = { x: 61, y: 24 };
+
+// Manual appearance for the switch: font size plus a free nudge, in 0.1px steps.
+// Kept in localStorage so it survives reloads; the panel writes the same key.
+const STYLE_KEY = "td-switch-style";
+const DEFAULT_STYLE = { fontSize: 12, dx: 0, dy: 0, buttonDx: 0, buttonDy: 0, labelDx: 0, labelDy: 0 };
+type SwitchStyle = typeof DEFAULT_STYLE;
+const STYLE_KEYS = ["fontSize", "dx", "dy", "buttonDx", "buttonDy", "labelDx", "labelDy"] as const;
+
+const round1 = (value: number): number => Math.round(value * 10) / 10;
+
+/** Read the saved appearance, tolerating missing or malformed storage. */
+function readStyle(): SwitchStyle {
+  try {
+    const raw = localStorage.getItem(STYLE_KEY);
+    const parsed = raw ? (JSON.parse(raw) as Partial<SwitchStyle> | null) : null;
+    const read = (key: keyof SwitchStyle) => {
+      const value = Number(parsed?.[key]);
+      return Number.isFinite(value) ? round1(value) : DEFAULT_STYLE[key];
+    };
+    const fontSize = read("fontSize");
+    return {
+      fontSize: fontSize > 0 ? fontSize : DEFAULT_STYLE.fontSize,
+      dx: read("dx"),
+      dy: read("dy"),
+      buttonDx: read("buttonDx"),
+      buttonDy: read("buttonDy"),
+      labelDx: read("labelDx"),
+      labelDy: read("labelDy"),
+    };
+  } catch {
+    return { ...DEFAULT_STYLE };
+  }
+}
+
+/** Persist an appearance; null restores the defaults. */
+function writeStyle(style: SwitchStyle | null): void {
+  try {
+    if (style === null) localStorage.removeItem(STYLE_KEY);
+    else localStorage.setItem(STYLE_KEY, JSON.stringify(style));
+  } catch {
+    // Storage may be unavailable; the in-memory value still applies.
+  }
+}
 /** Gap between the admission control's right edge and the switch. */
 const DEFAULT_GAP = 16;
 /** Admission-control labels (the row control the switch sits after). */
 const ADMISSION_LABEL = /完全访问|只读|保护|工作区|Full access|Read-only|Guarded|Workspace/;
+/** The host stacks cached chat panes in one grid cell at `opacity: 0`. */
+const PANE_SELECTOR = ".chat-pane-cache__pane";
+const PANE_VISIBLE_CLASS = "chat-pane-cache__pane--visible";
+/** The composer's own box; the anchor must never leave it. */
+const COMPOSER_SHELL_SELECTOR = ".agent-chat__composer-shell";
 
 type Offset = { x: number; y: number };
 
@@ -55,6 +103,17 @@ type Probe = {
   errorKind: "read" | "write" | null;
   writes: number;
   updatedAt: number | null;
+  /** Follow-loop diagnostics: is the animation-frame loop still running? */
+  loopTicks: number;
+  lastLoopAt: number | null;
+  /** Placement diagnostics: what the last sync resolved to. */
+  places: number;
+  lastPlaceAt: number | null;
+  reason: "none" | "after-admission" | "composer-offset";
+  candidates: number;
+  hiddenCandidates: number;
+  anchorDetail: string | null;
+  placementError: string | null;
 };
 
 type ProbeRegistry = {
@@ -95,6 +154,32 @@ const STYLE = `
 .td-switch[aria-checked="true"] .td-knob { transform: translateX(11px); }
 .td-label { white-space: nowrap; }
 .td-switch[data-state="error"] .td-label { color: #d9534f; }
+.td-setup {
+  position: fixed; width: 268px; padding: 12px;
+  border-radius: 12px; background: Canvas; color: CanvasText;
+  border: 1px solid rgba(127,127,127,.28);
+  box-shadow: 0 12px 32px rgba(0,0,0,.28);
+  font: 12px/1.5 var(--font-body, system-ui, sans-serif);
+  z-index: 2147483001;
+}
+.td-setup[hidden] { display: none; }
+.td-setup-title { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.td-setup-title span { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; opacity: .55; }
+.td-setup-close { border: 0; background: transparent; color: inherit; cursor: pointer; opacity: .6; font-size: 14px; }
+.td-row { display: grid; grid-template-columns: 48px 22px 1fr 22px; gap: 6px; align-items: center; margin-bottom: 6px; }
+.td-group { margin: 8px 0 4px; font-size: 10px; letter-spacing: .08em; opacity: .55; }
+.td-step { width: 22px; height: 22px; border-radius: 6px; border: 1px solid rgba(127,127,127,.4); background: transparent; color: inherit; cursor: pointer; line-height: 1; }
+.td-val { text-align: center; font-variant-numeric: tabular-nums; opacity: .85; }
+input.td-val {
+  width: 100%; height: 22px; text-align: center; font: inherit;
+  font-variant-numeric: tabular-nums; color: inherit;
+  background: transparent; border: 1px solid rgba(127,127,127,.35);
+  border-radius: 6px; padding: 0 2px;
+}
+input.td-val:focus { outline: 2px solid #4c8dff; outline-offset: 1px; opacity: 1; }
+.td-actions { display: flex; gap: 6px; margin-top: 10px; }
+.td-btn { flex: 1; height: 26px; border-radius: 8px; border: 1px solid rgba(127,127,127,.4); background: transparent; color: inherit; cursor: pointer; }
+.td-btn.primary { background: #4c8dff; border-color: transparent; color: #fff; }
 `;
 
 function registry(): ProbeRegistry {
@@ -112,6 +197,15 @@ function registry(): ProbeRegistry {
     errorKind: null,
     writes: 0,
     updatedAt: null,
+    loopTicks: 0,
+    lastLoopAt: null,
+    places: 0,
+    lastPlaceAt: null,
+    reason: "none",
+    candidates: 0,
+    hiddenCandidates: 0,
+    anchorDetail: null,
+    placementError: null,
   };
   const elements: HTMLElement[] = [];
   const entry: ProbeRegistry = {
@@ -151,29 +245,105 @@ function describe(element: Element | null): string | null {
   return `${tag}${id}${cls}`;
 }
 
+function isReallyVisible(element: Element): boolean {
+  const probe = element as Element & {
+    checkVisibility?: (options?: { checkOpacity?: boolean }) => boolean;
+  };
+  if (typeof probe.checkVisibility === "function") {
+    try {
+      return probe.checkVisibility({ checkOpacity: true });
+    } catch {
+      // Older engines reject the options bag; fall through to the manual walk.
+    }
+  }
+  let node: Element | null = element;
+  for (let depth = 0; node && depth < 40; depth += 1) {
+    const style = window.getComputedStyle(node);
+    if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0") {
+      return false;
+    }
+    node = node.parentElement;
+  }
+  return true;
+}
+
+/**
+ * The nearest ancestor whose width tracks the pane/Сside panel (the composer
+ * shell itself is capped by `max-width`, so a sidebar drag moves it without
+ * resizing it).
+ */
+function widerAncestor(element: HTMLElement): HTMLElement | null {
+  const width = element.getBoundingClientRect().width;
+  let node: HTMLElement | null = element.parentElement;
+  for (let depth = 0; node && depth < 4; depth += 1) {
+    if (node.getBoundingClientRect().width > width + 1) return node;
+    node = node.parentElement;
+  }
+  return node;
+}
+
 function findPlacement(
+  container: HTMLElement,
   button: HTMLElement,
   offset: Offset,
   cached: { admission: Element | null; at: number },
-): { left: number; top: number; label: string; box: HTMLElement; anchor: Element | null } | null {
+): { left: number; top: number; label: "after-admission" | "composer-offset"; box: HTMLElement; anchor: Element | null; candidates: number; hiddenCandidates: number; anchorDetail: string | null } | null {
   const areas = Array.from(document.querySelectorAll("textarea")).filter((element) => {
     const rect = element.getBoundingClientRect();
     return rect.width > 120 && rect.height > 0 && element.offsetParent !== null;
   });
   if (areas.length === 0) return null;
-  areas.sort((a, b) => b.getBoundingClientRect().width - a.getBoundingClientRect().width);
-  const textarea = areas[0];
 
-  let box = textarea.getBoundingClientRect();
-  let node: HTMLElement = textarea;
-  const limit = Math.min(window.innerHeight * 0.5, 480);
-  for (let depth = 0; depth < 8 && node.parentElement; depth += 1) {
-    const parent = node.parentElement;
-    const rect = parent.getBoundingClientRect();
-    if (rect.width + 4 < box.width) break;
-    if (rect.height > limit) break;
-    box = rect;
-    node = parent;
+  // A cached pane's composer keeps a real box (the pane is only translucent), so
+  // the geometry filter above cannot tell it apart from the composer on screen.
+  // Picking the widest textarea outright therefore latched onto a hidden pane's
+  // composer, which never moves while the composer the owner is looking at does:
+  // the switch looked correctly placed and then froze. Rank the pane that owns
+  // this accessory first, then genuinely visible composers, then width.
+  const ownPane = container.closest(PANE_SELECTOR);
+  // The common case is exactly one composer on screen; skip the visibility
+  // probes then — each one costs a style walk, and running them per candidate on
+  // every placement showed up as lag while dragging the window.
+  const ranked =
+    areas.length === 1
+      ? [{ element: areas[0], width: 0, visible: true, samePane: true }]
+      : areas
+          .map((element) => ({
+            element,
+            width: element.getBoundingClientRect().width,
+            visible: isReallyVisible(element),
+            samePane: ownPane !== null && element.closest(PANE_SELECTOR) === ownPane,
+          }))
+          .sort((a, b) => {
+            if (a.samePane !== b.samePane) return a.samePane ? -1 : 1;
+            if (a.visible !== b.visible) return a.visible ? -1 : 1;
+            return b.width - a.width;
+          });
+  const textarea = ranked[0].element;
+  const candidates = ranked.length;
+  const hiddenCandidates = ranked.filter((candidate) => !candidate.visible).length;
+
+  // Root everything in the composer's own shell. Walking up from the textarea
+  // works on a settled chat pane, but on a freshly opened page the shell's
+  // ancestor (a draft/launcher column) measures as wide as the shell, so the
+  // walk kept climbing into a page container — and the control lookup then
+  // latched onto an element outside the composer, pushing the switch past the
+  // composer's right edge until the next reload. Scoping the box and the
+  // control lookups to the shell keeps the switch inside the composer whatever
+  // the surrounding layout is doing.
+  const shell = textarea.closest(COMPOSER_SHELL_SELECTOR) as HTMLElement | null;
+  let box = (shell ?? textarea).getBoundingClientRect();
+  let node: HTMLElement = shell ?? textarea;
+  if (!shell) {
+    const limit = Math.min(window.innerHeight * 0.5, 480);
+    for (let depth = 0; depth < 8 && node.parentElement; depth += 1) {
+      const parent = node.parentElement;
+      const rect = parent.getBoundingClientRect();
+      if (rect.width + 4 < box.width) break;
+      if (rect.height > limit) break;
+      box = rect;
+      node = parent;
+    }
   }
 
   const isVisible = (element: Element) => {
@@ -181,9 +351,20 @@ function findPlacement(
     return rect.width > 0 && rect.height > 0;
   };
 
+  // Anything inside the composer shell but outside the input's own row — a task
+  // progress card, a queued-message banner — donates its own buttons (collapse,
+  // delete) and its own text as candidates, which moved the switch up onto the
+  // card and right onto the model picker. Scope every candidate to the row band.
+  const rowBand = textarea.getBoundingClientRect();
+  const inRow = (element: Element) => {
+    const rect = element.getBoundingClientRect();
+    const centre = rect.top + rect.height / 2;
+    return centre >= rowBand.top - 16 && centre <= rowBand.bottom + 16;
+  };
+
   // Vertical: centre on the row's own trailing control (send/mic), which is a
   // stable structural anchor regardless of how the box's height is composed.
-  const buttons = Array.from(node.querySelectorAll("button")).filter(isVisible);
+  const buttons = Array.from(node.querySelectorAll("button")).filter(isVisible).filter(inRow);
   const trailing = buttons[buttons.length - 1];
   const trailingRect = trailing?.getBoundingClientRect();
   const own = button.getBoundingClientRect();
@@ -198,33 +379,116 @@ function findPlacement(
     admission = null;
     if (Date.now() - cached.at > 2000) {
       cached.at = Date.now();
-      const candidates = Array.from(node.querySelectorAll("button, span, div")).filter((element) => {
+      // The Control UI renders some chips through custom elements, so match on
+      // every element and keep only the tightest matches: a container that
+      // merely wraps the chip must never capture the anchor, or the switch
+      // lands at the container's right edge — outside the composer.
+      const matches = Array.from(node.querySelectorAll("*")).filter((element) => {
         const text = (element.textContent ?? "").trim();
-        return text.length > 0 && ADMISSION_LABEL.test(text) && isVisible(element);
-      });
-      candidates.sort((a, b) => a.getBoundingClientRect().width - b.getBoundingClientRect().width);
-      admission = candidates[0] ?? null;
+        return text.length > 0 && ADMISSION_LABEL.test(text);
+      }).filter(inRow);
+      const tightest = matches.filter(
+        (element) => !matches.some((other) => other !== element && element.contains(other)),
+      );
+      tightest.sort((a, b) => a.getBoundingClientRect().width - b.getBoundingClientRect().width);
+      for (const candidate of tightest) {
+        const control = (candidate.closest("button, [role='button']") ?? candidate) as Element;
+        const anchor = node.contains(control) ? control : candidate;
+        if (isVisible(anchor)) {
+          admission = anchor;
+          break;
+        }
+      }
       cached.admission = admission;
     }
   }
 
+  // Whatever the anchor resolved to, the control belongs inside the composer:
+  // clamp it, so a wrapper that slips through can never park the switch outside
+  // the box the owner is looking at.
+  const frame = (shell ?? node).getBoundingClientRect();
+  const clamp = (value: number, min: number, max: number) =>
+    Math.round(Math.min(Math.max(value, min), Math.max(min, max)));
+  const rawLeft = admission
+    ? Math.round(admission.getBoundingClientRect().right + DEFAULT_GAP)
+    : Math.round(box.left + offset.x);
+  const left = clamp(rawLeft, frame.left + 4, frame.right - own.width - 4);
+  const placementTop = clamp(top, frame.top, frame.bottom - own.height);
+  const anchorDetail = admission
+    ? `${describe(admission)} right=${Math.round(admission.getBoundingClientRect().right)}`
+    : null;
+
   if (admission) {
     return {
-      left: Math.round(admission.getBoundingClientRect().right + DEFAULT_GAP),
-      top,
+      left,
+      top: placementTop,
       label: "after-admission",
       box: node,
       anchor: admission,
+      candidates,
+      hiddenCandidates,
+      anchorDetail,
     };
   }
-  return { left: Math.round(box.left + offset.x), top, label: "composer-offset", box: node, anchor: null };
+  return {
+    left,
+    top: placementTop,
+    label: "composer-offset",
+    box: node,
+    anchor: null,
+    candidates,
+    hiddenCandidates,
+    anchorDetail,
+  };
 }
+
+import { SYS_STATUS_MARKUP, renderSysStatus } from "./generated-sys-status-html.js";
+
+/** Same-origin plugin method the widget reads host metrics through. */
+const METRICS_METHOD = "typed-decisions.metrics";
 
 export default defineControlUiPlugin({
   id: PLUGIN_ID,
   activate(host: ControlUiHost) {
     const probe = registry();
     const state = probe.state;
+
+    // Board widget for this plugin's board kind (typed-decisions:sys-status).
+    // Guarded: a rejected registration must never abort activate() and take the
+    // accessory below with it (that regression happened once).
+    try {
+      host.ui.registerWidget({
+        id: "sys-status",
+        label: "系统监控",
+        mount(container) {
+          // Shadow DOM isolates the fragment from the Control UI page's own
+          // stylesheet. In the light DOM the host's design-system rules (it
+          // ships classes such as `.badge` and `.metric` with their own font
+          // family and sizes) land on this widget's inner elements, which the
+          // sandboxed HTML lane never risked. Theme custom properties still
+          // inherit through the shadow boundary, so `var(--text)` /
+          // `var(--font-body)` keep resolving. The logic ships in this bundle
+          // because the page CSP is `script-src 'self'`, and data comes from
+          // the plugin host because `connect-src` excludes the metrics origin.
+          const root: HTMLElement | ShadowRoot = container.attachShadow
+            ? container.attachShadow({ mode: "open" })
+            : container;
+          root.innerHTML = SYS_STATUS_MARKUP;
+          const widget = root.querySelector('[id="oa-sys"]') as HTMLElement | null;
+          if (!widget) {
+            container.textContent = "系统监控组件挂载失败：找不到根节点。";
+            return;
+          }
+          renderSysStatus(widget, {
+            read: (id, params) => host.request(id, params ?? {}),
+            metrics: () => host.request(METRICS_METHOD),
+          });
+          return { dispose() { root.innerHTML = ""; } };
+        },
+      });
+    } catch (error) {
+      console.warn("[typed-decisions] sys-status board widget unavailable", error);
+    }
 
     host.ui.registerAccessory({
       id: "decision-intervention",
@@ -268,6 +532,151 @@ export default defineControlUiPlugin({
         button.append(track, label);
         root.append(style, button);
 
+        // Appearance panel: font size and a free 0.1px nudge, saved to
+        // localStorage and applied to this switch only. The panel never moves
+        // the control's hit area: the offset shifts the placed box itself, and
+        // the font size only changes the type.
+        let liveStyle = readStyle();
+
+        const setup = document.createElement("div");
+        setup.className = "td-setup";
+        setup.hidden = true;
+        const row = (label: string, key: keyof SwitchStyle) => `
+          <div class="td-row"><label>${label}</label><button class="td-step" type="button" data-k="${key}" data-d="-0.1">−</button><input class="td-val" type="number" step="0.1" inputmode="decimal" data-v="${key}" /><button class="td-step" type="button" data-k="${key}" data-d="0.1">+</button></div>`;
+        setup.innerHTML = `
+          <div class="td-setup-title"><span>决策介入 · 外观</span><button class="td-setup-close" type="button" data-act="close" aria-label="关闭">×</button></div>
+          ${row("字号", "fontSize")}
+          <div class="td-group">按钮</div>
+          ${row("左右", "buttonDx")}
+          ${row("上下", "buttonDy")}
+          <div class="td-group">文字</div>
+          ${row("左右", "labelDx")}
+          ${row("上下", "labelDy")}
+          <div class="td-group">整体</div>
+          ${row("左右", "dx")}
+          ${row("上下", "dy")}
+          <div class="td-actions"><button class="td-btn" type="button" data-act="reset">恢复默认</button><button class="td-btn primary" type="button" data-act="save">保存</button></div>
+        `;
+        root.append(setup);
+
+        const syncSetup = () => {
+          for (const key of STYLE_KEYS) {
+            const field = setup.querySelector(`[data-v="${key}"]`) as HTMLInputElement | null;
+            if (field) field.value = liveStyle[key].toFixed(1);
+          }
+        };
+
+        /** Apply a value typed straight into the field. */
+        const commitField = (key: keyof SwitchStyle, raw: string) => {
+          const parsed = Number(raw);
+          if (!Number.isFinite(parsed)) {
+            syncSetup();
+            return;
+          }
+          const value = key === "fontSize" ? Math.max(1, round1(parsed)) : round1(parsed);
+          liveStyle = { ...liveStyle, [key]: value };
+          syncSetup();
+          applyStyle();
+        };
+        setup.addEventListener("change", (event) => {
+          const field = event.target as HTMLInputElement | null;
+          const key = field?.dataset?.v as keyof SwitchStyle | undefined;
+          if (!field || !key || !(STYLE_KEYS as readonly string[]).includes(key)) return;
+          commitField(key, field.value);
+        });
+        setup.addEventListener("keydown", (event) => {
+          if (event.key !== "Enter") return;
+          const field = event.target as HTMLInputElement | null;
+          const key = field?.dataset?.v as keyof SwitchStyle | undefined;
+          if (!field || !key) return;
+          event.preventDefault();
+          commitField(key, field.value);
+          field.blur();
+        });
+
+        /** Paint the saved values onto the switch's own parts. */
+        const paintStyle = () => {
+          button.style.fontSize = `${liveStyle.fontSize}px`;
+          // The track (the toggle itself) and the label move independently, so
+          // the owner can align the text with the pill without dragging the
+          // control's hit area with it.
+          track.style.transform = `translate(${liveStyle.buttonDx}px, ${liveStyle.buttonDy}px)`;
+          label.style.transform = `translate(${liveStyle.labelDx}px, ${liveStyle.labelDy}px)`;
+        };
+
+        /** Push the in-memory appearance onto the control and re-place it. */
+        const applyStyle = () => {
+          paintStyle();
+          applied.left = Number.NaN;
+          applied.top = Number.NaN;
+          safePlace();
+        };
+        // Paint only: `applied`/`safePlace` are declared further down, and the
+        // first placement happens on its own during mount.
+        paintStyle();
+
+        /** Anchor the panel above the switch so it never covers the control. */
+        const positionSetup = () => {
+          if (setup.hidden) return;
+          const rect = container.getBoundingClientRect();
+          setup.style.left = `${Math.round(Math.max(8, Math.min(rect.left, window.innerWidth - 284)))}px`;
+          setup.style.bottom = `${Math.round(window.innerHeight - rect.top + 8)}px`;
+        };
+
+        const toggleSetup = (show: boolean) => {
+          setup.hidden = !show;
+          if (show) {
+            syncSetup();
+            positionSetup();
+          }
+        };
+
+        setup.addEventListener("click", (event) => {
+          const target = (event.target as Element | null)?.closest?.("button") as HTMLButtonElement | null;
+          if (!target) return;
+          event.preventDefault();
+          event.stopPropagation();
+          const act = target.dataset.act;
+          if (act === "close") {
+            toggleSetup(false);
+            return;
+          }
+          if (act === "save") {
+            writeStyle(liveStyle);
+            target.textContent = "已保存";
+            setTimeout(() => {
+              target.textContent = "保存";
+            }, 900);
+            return;
+          }
+          if (act === "reset") {
+            liveStyle = { ...DEFAULT_STYLE };
+            writeStyle(null);
+            syncSetup();
+            applyStyle();
+            return;
+          }
+          const key = target.dataset.k as keyof SwitchStyle | undefined;
+          const step = Number(target.dataset.d);
+          if (!key || !Number.isFinite(step)) return;
+          if (!(STYLE_KEYS as readonly string[]).includes(key)) return;
+          const next = round1(liveStyle[key] + step);
+          liveStyle = { ...liveStyle, [key]: key === "fontSize" ? Math.max(1, next) : next };
+          syncSetup();
+          applyStyle();
+        });
+
+        // Ctrl+Alt+D toggles the panel; the registry hook lets an agent summon it.
+        const onShortcut = (event: KeyboardEvent) => {
+          if (!event.ctrlKey || !event.altKey) return;
+          if (event.key !== "d" && event.key !== "D") return;
+          event.preventDefault();
+          toggleSetup(setup.hidden === true);
+        };
+        document.addEventListener("keydown", onShortcut, true);
+        const openable = probe as typeof probe & { openSettings?: (show?: boolean) => void };
+        openable.openSettings = (show = true) => toggleSetup(show);
+
         // Places the control in the composer toolbar row; falls back to the
         // session header when no composer is on screen. The control is re-synced
         // continuously (see the follow loop) and only writes styles when the
@@ -277,17 +686,30 @@ export default defineControlUiPlugin({
         const applied = { left: Number.NaN, top: Number.NaN };
         let observedBox: HTMLElement | null = null;
         let observedAnchor: Element | null = null;
+        let observedContainer: HTMLElement | null = null;
         const place = () => {
           if (disposed) return;
           if (!presented) {
             container.style.display = "none";
             return;
           }
+          // A cached pane keeps its DOM (and its accessory) mounted at opacity 0:
+          // its switch would sit invisible behind the active pane, so skip it
+          // instead of painting a control nobody can see or click.
+          const ownPane = container.closest(PANE_SELECTOR);
+          if (ownPane && !ownPane.classList.contains(PANE_VISIBLE_CLASS)) {
+            container.style.display = "none";
+            return;
+          }
           container.style.display = "";
-          const target = findPlacement(button, state.placement.offset, admissionCache);
+          const target = findPlacement(container, button, state.placement.offset, admissionCache);
           if (!target) {
             applied.left = Number.NaN;
             applied.top = Number.NaN;
+            state.reason = "none";
+            state.candidates = 0;
+            state.hiddenCandidates = 0;
+            state.anchorDetail = null;
             state.placement = {
               anchored: false,
               offset: { ...state.placement.offset },
@@ -315,44 +737,91 @@ export default defineControlUiPlugin({
             observedAnchor = target.anchor;
             if (target.anchor) observer?.observe(target.anchor);
           }
+          // Watch the element whose width actually tracks a sidebar drag. The
+          // resize observer runs after layout and before paint, so placing from
+          // its callback puts the switch in the same frame as the composer's new
+          // position — frame-loop placement is a frame behind, because an
+          // animation-frame callback measures the layout of the frame before.
+          const paneObserverTarget = widerAncestor(target.box);
+          if (paneObserverTarget !== observedContainer) {
+            if (observedContainer) observer?.unobserve(observedContainer);
+            observedContainer = paneObserverTarget;
+            if (paneObserverTarget) observer?.observe(paneObserverTarget);
+          }
 
           state.placement = {
             anchored: true,
             offset: { ...state.placement.offset },
-            left: target.left,
-            top: target.top,
+            left: round1(target.left + liveStyle.dx),
+            top: round1(target.top + liveStyle.dy),
             anchor: target.label,
           };
-          if (applied.left === target.left && applied.top === target.top && container.style.position === "fixed") {
+          state.reason = target.label;
+          state.candidates = target.candidates;
+          state.hiddenCandidates = target.hiddenCandidates;
+          state.anchorDetail = target.anchorDetail;
+          positionSetup();
+          const left = state.placement.left as number;
+          const top = state.placement.top as number;
+          if (applied.left === left && applied.top === top && container.style.position === "fixed") {
             return;
           }
-          applied.left = target.left;
-          applied.top = target.top;
+          state.places += 1;
+          state.lastPlaceAt = Date.now();
+          applied.left = left;
+          applied.top = top;
           container.style.position = "fixed";
-          container.style.left = `${target.left}px`;
-          container.style.top = `${target.top}px`;
+          container.style.left = `${left}px`;
+          container.style.top = `${top}px`;
           container.style.zIndex = String(Z_INDEX);
         };
 
-        // Continuous alignment: a low-frequency poll keeps the control locked to
-        // the toolbar, and any layout signal (window/viewport resize, scroll,
-        // fullscreen, observed element resize) switches to a short per-frame
-        // burst so it never drifts while the page is being resized or the pane
-        // is moving.
+        // A placement must never be able to kill the follow loop: a throw here
+        // would otherwise escape every animation frame and leave the switch
+        // frozen at whatever coordinate it last wrote.
+        const safePlace = () => {
+          try {
+            place();
+          } catch (error) {
+            state.placementError = error instanceof Error ? error.message : String(error);
+            console.warn(`[${PLUGIN_ID}] 定位失败：${state.placementError}`);
+          }
+        };
+
+        // Continuous alignment, at frame rate but writing only when the tracked
+        // geometry actually moved: the composer shell and the control the switch
+        // hangs off are measured every frame, and a full placement runs only when
+        // that geometry changed (plus a slow poll as a backstop). Signals no
+        // longer place synchronously — a window drag fires resize every frame, and
+        // placing inside the event both forced layout mid-event and stacked a
+        // second placement on top of the frame loop, which read as lag.
         const POLL_MS = 250;
-        const BURST_MS = 800;
         let lastSync = 0;
-        let burstUntil = 0;
+        let lastSignature = "";
+        const trackedSignature = () => {
+          if (!observedBox) return "";
+          const box = observedBox.getBoundingClientRect();
+          const anchor = observedAnchor?.getBoundingClientRect();
+          const anchorKey = anchor ? `${Math.round(anchor.left)},${Math.round(anchor.top)}` : "";
+          return `${Math.round(box.left)},${Math.round(box.top)},${Math.round(box.width)},${Math.round(box.height)}|${anchorKey}`;
+        };
+        const syncNow = () => {
+          lastSync = Date.now();
+          safePlace();
+          lastSignature = trackedSignature();
+        };
+        // A layout signal only marks the geometry stale; the frame loop below does
+        // the work, so a burst of signals cannot stack up placements.
         const follow = () => {
-          burstUntil = Date.now() + BURST_MS;
+          lastSignature = "";
         };
         const loop = () => {
           if (disposed) return;
           frame = requestAnimationFrame(loop);
-          const now = Date.now();
-          if (now < burstUntil || now - lastSync >= POLL_MS) {
-            lastSync = now;
-            place();
+          state.loopTicks += 1;
+          state.lastLoopAt = Date.now();
+          if (trackedSignature() !== lastSignature || Date.now() - lastSync >= POLL_MS) {
+            syncNow();
           }
         };
 
@@ -398,7 +867,7 @@ export default defineControlUiPlugin({
             probeTimer = undefined;
             return;
           }
-          place();
+          safePlace();
           hitTest();
         };
 
@@ -410,7 +879,7 @@ export default defineControlUiPlugin({
         };
 
         const reposition = () => {
-          place();
+          safePlace();
           follow();
         };
 
@@ -423,7 +892,7 @@ export default defineControlUiPlugin({
             try {
               const response = await host.request<{
                 ok?: boolean;
-                result?: { enabled?: boolean };
+                result?: { enabled?: boolean; showSetup?: boolean };
                 error?: string;
               }>("plugins.sessionAction", {
                 pluginId: PLUGIN_ID,
@@ -435,6 +904,7 @@ export default defineControlUiPlugin({
               if (disposed) return;
               if (response && response.ok === false) throw new Error(response.error ?? "read-failed");
               checked = response?.result?.enabled === true;
+              if (response?.result?.showSetup === true) toggleSetup(true);
               state.lastError = null;
               state.errorKind = null;
               render();
@@ -482,17 +952,42 @@ export default defineControlUiPlugin({
         });
         button.addEventListener("td:reposition", reposition);
         const onLayout = () => follow();
+        // Scrolling moves the composer without resizing anything and the scroll
+        // offset is already applied when the event fires, so place straight
+        // away; it costs no forced layout and keeps scrolling in sync.
+        const onScroll = () => syncNow();
         window.addEventListener("resize", onLayout);
-        window.addEventListener("scroll", onLayout, { passive: true, capture: true });
+        window.addEventListener("scroll", onScroll, { passive: true, capture: true });
         document.addEventListener("fullscreenchange", onLayout);
         window.visualViewport?.addEventListener("resize", onLayout);
-        window.visualViewport?.addEventListener("scroll", onLayout);
+        window.visualViewport?.addEventListener("scroll", onScroll);
+        // Post-layout hook: a resize observer callback is the one place that runs
+        // after the browser has laid the frame out and before it paints it.
         const observer =
-          typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => follow()) : undefined;
+          typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => syncNow()) : undefined;
         observer?.observe(document.documentElement);
+
+        // Belt and braces for the follow loop: a plain timer keeps re-placing
+        // even when no animation frame arrives (throttled/backgrounded rAF, a
+        // frame budget stall), so the switch can never sit frozen while its
+        // composer has moved.
+        const WATCHDOG_MS = 400;
+        const watchdog = setInterval(() => {
+          if (disposed) return;
+          safePlace();
+          lastSignature = trackedSignature();
+        }, WATCHDOG_MS);
+        document.addEventListener("visibilitychange", onLayout);
+        window.addEventListener("pageshow", onLayout);
 
         render();
         startProbe();
+        // The appearance panel is summoned by a fresh flag file, read by the
+        // plugin host on this call; poll while it is closed and cheap.
+        const setupPoll = setInterval(() => {
+          if (disposed || !setup.hidden) return;
+          void readState();
+        }, 15000);
         void readState();
         frame = requestAnimationFrame(loop);
 
@@ -524,13 +1019,20 @@ export default defineControlUiPlugin({
           dispose() {
             disposed = true;
             if (probeTimer) clearInterval(probeTimer);
+            clearInterval(watchdog);
+            clearInterval(setupPoll);
+            document.removeEventListener("keydown", onShortcut, true);
+            delete openable.openSettings;
+            setup.remove();
             if (frame) cancelAnimationFrame(frame);
             observer?.disconnect();
+            document.removeEventListener("visibilitychange", onLayout);
+            window.removeEventListener("pageshow", onLayout);
             window.removeEventListener("resize", onLayout);
-            window.removeEventListener("scroll", onLayout, { capture: true } as EventListenerOptions);
+            window.removeEventListener("scroll", onScroll, { capture: true } as EventListenerOptions);
             document.removeEventListener("fullscreenchange", onLayout);
             window.visualViewport?.removeEventListener("resize", onLayout);
-            window.visualViewport?.removeEventListener("scroll", onLayout);
+            window.visualViewport?.removeEventListener("scroll", onScroll);
             probe.drop(button);
             state.mounted = probe.elements().length > 0;
             button.remove();

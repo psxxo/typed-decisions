@@ -1,6 +1,6 @@
 {
   "name": "@psxxo/typed-decisions",
-  "version": "1.5.0",
+  "version": "1.6.7",
   "description": "System One typed decision provider for OpenClaw's decisionModel role: choice / score / boolean judgments with probability distributions.",
   "type": "module",
   "license": "MIT",
@@ -9,6 +9,7 @@
     "openclaw.plugin.json",
     "README.md",
     "CHANGELOG.md",
+    "assets",
     "src",
     "dist"
   ],
@@ -36,7 +37,8 @@
     }
   },
   "scripts": {
-    "build": "npm run typecheck && node scripts/build-ui.mjs",
+    "build": "npm run gen && npm run typecheck && node scripts/build-ui.mjs",
+    "gen": "node scripts/generate-widget.mjs",
     "typecheck": "tsc --noEmit",
     "build:check": "node scripts/build-ui.mjs --check"
   },

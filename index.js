@@ -18,7 +18,9 @@
 import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { readFile, stat } from "node:fs/promises";
+import { readFile, writeFile, stat } from "node:fs/promises";
+import { request as httpsRequest } from "node:https";
+import { registerSysStatusNudge } from "./src/sys-status-nudge.js";
 
 // Per-session 「决策介入」 state. The Control UI accessory writes it through the
 // host's `sessions.pluginPatch` method; the prompt hook below reads it and
@@ -26,6 +28,37 @@ import { readFile, stat } from "node:fs/promises";
 const EXTENSION_NAMESPACE = "decision-intervention";
 const SESSION_ACTION_ID = "decision-intervention.state";
 const EXTENSION_SLOT_KEY = "decisionIntervention";
+/** Board widget kind id; the dashboard tool pins it as `typed-decisions:sys-status`. */
+const WIDGET_KIND_ID = "sys-status";
+/** Gateway method the native widget reads host metrics through. */
+const METRICS_METHOD = "typed-decisions.metrics";
+/** Loopback host-metrics endpoint; only this backend reaches it. */
+const METRICS_URL = "https://127.0.0.1:18575/metrics.json";
+
+/**
+ * Read the local host-metrics document server-side. The browser frame cannot:
+ * the Control UI CSP allows neither an inline script nor a connection to this
+ * origin. The endpoint serves a self-signed certificate, so verification is
+ * skipped for this loopback-only read.
+ */
+function readMetrics() {
+  return new Promise((resolve, reject) => {
+    const req = httpsRequest(METRICS_URL, { rejectUnauthorized: false, timeout: 5000 }, (res) => {
+      const chunks = [];
+      res.on("data", (chunk) => chunks.push(chunk));
+      res.on("end", () => {
+        try {
+          resolve(JSON.parse(Buffer.concat(chunks).toString("utf8")));
+        } catch (error) {
+          reject(error);
+        }
+      });
+    });
+    req.on("timeout", () => req.destroy(new Error("metrics endpoint timeout")));
+    req.on("error", reject);
+    req.end();
+  });
+}
 
 const INTERVENTION_GUIDANCE = [
   "决策介入已开启（本会话）。",
@@ -74,6 +107,22 @@ function normalizeEndpoint(value) {
   return host || undefined;
 }
 
+/** sys-status nudge config: the lane stays off unless the operator supplies a widget data origin. */
+function normalizeSysStatus(raw) {
+  const value = raw && typeof raw === "object" ? raw : {};
+  const strings = (input) =>
+    Array.isArray(input)
+      ? input.filter((item) => typeof item === "string" && item.trim()).map((item) => item.trim())
+      : [];
+  return {
+    enabled: value.enabled !== false,
+    widgetPath:
+      typeof value.widgetPath === "string" && value.widgetPath.trim() ? value.widgetPath.trim() : undefined,
+    netOrigins: strings(value.netOrigins),
+    tools: strings(value.tools),
+  };
+}
+
 function normalizeConfig(raw) {
   const cfg = raw && typeof raw === "object" ? raw : {};
   const keyFile =
@@ -82,7 +131,13 @@ function normalizeConfig(raw) {
     typeof cfg.timeoutMs === "number" && Number.isFinite(cfg.timeoutMs) && cfg.timeoutMs > 0
       ? Math.min(cfg.timeoutMs, HOST_MAX_TIMEOUT_MS)
       : DEFAULT_TIMEOUT_MS;
-  return { credential: cfg.credential, keyFile, endpoint: normalizeEndpoint(cfg.endpoint), timeoutMs };
+  return {
+    credential: cfg.credential,
+    keyFile,
+    endpoint: normalizeEndpoint(cfg.endpoint),
+    timeoutMs,
+    sysStatus: normalizeSysStatus(cfg.sysStatus),
+  };
 }
 
 /** DecisionEntry -> plain text for the vendor rubric fields. */
@@ -312,12 +367,41 @@ async function readIntervention(api, agentId, sessionKey) {
   }
 }
 
+// One-shot "open the appearance panel" flag. The operator (or the agent acting
+// for them) writes a small JSON file; the accessory polls the session action and
+// opens the panel when the flag is fresh, so summoning it never needs a click.
+const SHOW_SETUP_FILE = join(homedir(), ".openclaw", "typed-decisions-show-setup.json");
+const SHOW_SETUP_TTL_MS = 600_000;
+
+async function readShowSetup(sessionKey) {
+  try {
+    const raw = await readFile(SHOW_SETUP_FILE, "utf8");
+    const parsed = JSON.parse(raw);
+    if (parsed?.sessionKey !== sessionKey) return false;
+    if (Date.now() - Number(parsed.at ?? 0) >= SHOW_SETUP_TTL_MS) return false;
+    // One-shot: burn the flag so a poll every 15s cannot reopen the panel the
+    // owner just closed.
+    await writeFile(SHOW_SETUP_FILE, JSON.stringify({ sessionKey, at: 0 })).catch(() => {});
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export default definePluginEntry({
   id: PLUGIN_ID,
   name: "Typed Decisions",
   description: "System One typed decision provider (choice / score / boolean) for the decisionModel role.",
   register(api) {
     const config = normalizeConfig(api.pluginConfig);
+
+    // sys-status dashboard widget nudge — hook-only, once per session, off
+    // unless the operator configured a widget data origin (sysStatus.netOrigins).
+    try {
+      registerSysStatusNudge(api, config.sysStatus);
+    } catch (error) {
+      api.logger?.warn?.(`[${PLUGIN_ID}] sys-status nudge unavailable: ${error?.message ?? error}`);
+    }
     const keyCache = { path: undefined, value: undefined, mtimeMs: 0, checkedAt: 0 };
 
     async function readKeyFile(path) {
@@ -449,11 +533,47 @@ export default definePluginEntry({
         handler: async (ctx) => {
           const sessionKey = typeof ctx?.sessionKey === "string" ? ctx.sessionKey : undefined;
           if (!sessionKey) return { ok: false, error: "session-key-required" };
-          return { ok: true, result: { enabled: await readIntervention(api, ctx.agentId, sessionKey) } };
+          return {
+            ok: true,
+            result: {
+              enabled: await readIntervention(api, ctx.agentId, sessionKey),
+              showSetup: await readShowSetup(sessionKey),
+            },
+          };
         },
       });
     } catch (error) {
       api.logger?.warn?.(`[${PLUGIN_ID}] session action unavailable: ${error?.message ?? error}`);
+    }
+
+    // Advertise the native board widget this plugin renders. The descriptor is
+    // what makes `typed-decisions:sys-status` a trusted widget kind the core
+    // `dashboard` tool can pin from any session, with no inline-client
+    // `show_widget` lane involved.
+    try {
+      api.session?.controls?.registerControlUiDescriptor?.({
+        id: WIDGET_KIND_ID,
+        surface: "widget",
+        label: "系统监控",
+        description: "宿主系统状态看板组件（typed-decisions 提供的原生 widget）。",
+        requiredScopes: ["operator.read"],
+      });
+    } catch (error) {
+      api.logger?.warn?.(`[${PLUGIN_ID}] widget descriptor unavailable: ${error?.message ?? error}`);
+    }
+
+    // Data side of the board widget: the browser cannot reach the metrics
+    // endpoint, so the widget asks this plugin and the plugin fetches it.
+    try {
+      api.registerGatewayMethod?.(METRICS_METHOD, async ({ respond }) => {
+        try {
+          respond(true, await readMetrics(), undefined);
+        } catch (error) {
+          respond(false, undefined, { message: error?.message ?? String(error) });
+        }
+      }, { scope: "operator.read" });
+    } catch (error) {
+      api.logger?.warn?.(`[${PLUGIN_ID}] metrics method unavailable: ${error?.message ?? error}`);
     }
 
     // Consumption side: when the session has 决策介入 on, tell the agent to route

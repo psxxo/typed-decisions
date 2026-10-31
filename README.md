@@ -12,6 +12,15 @@ It registers `contracts.decisionProviders: ["typed-decisions"]` and appears in t
 Control UI's **Decision** picker only — never in the chat / primary / fallback /
 utility model pickers.
 
+## What's new in 1.6.0
+
+- Ported the **sys-status dashboard widget nudge** from the retired
+  `memory-lancedb-cip` plugin: once per session the plugin asks the agent to pin
+  the shared `sys-status` widget onto that session's board. Hook-only
+  (`agent_turn_prepare`), no other capability — the decision lanes are untouched.
+- Config-driven, no baked defaults: the nudge is **off** until the operator sets
+  `sysStatus.netOrigins` (optional `sysStatus.tools`, `sysStatus.widgetPath`,
+  `sysStatus.enabled`). The widget HTML ships as `assets/sys-status-widget.html`.
 ## Configuration
 
 ```json5
