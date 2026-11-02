@@ -138,7 +138,7 @@ export function renderSysStatus(root: HTMLElement, api: SysStatusApi): () => voi
   // iframe so the hardware tiles keep updating while the Gateway is down. The
   // Gateway RPC remains the fallback for the first paint.
   var DIRECT_BASE=(function(){ try{ return (location.protocol||"https:")+"//"+(location.hostname||"47.93.209.162")+":18575"; }catch(e){ return "https://47.93.209.162:18575"; } })();
-  var hostAt=0, gwOk=null, directFrame=null, directSeen=false;
+  var hostAt=0, gwOk=null, directFrame=null, directSeen=false, directTriedAt=0;
   function hostFresh(){ return hostAt>0 && (Date.now()-hostAt)<7000; }
   function badge(){
     var dd=byId("gwdot");
@@ -152,6 +152,13 @@ export function renderSysStatus(root: HTMLElement, api: SysStatusApi): () => voi
     var fresh=hostFresh();
     markStale(!fresh);
     set("upd", fresh ? ("实时 · "+hhmm()) : outageText());
+    // A frame that failed before the certificate was accepted stays failed.
+    // Rebuild it every 20s until it delivers.
+    if(!directSeen && directTriedAt && Date.now()-directTriedAt>20000){
+      try{ if(directFrame) directFrame.remove(); }catch(e){}
+      directFrame=null;
+      startDirect();
+    }
     var hint=byId("hint");
     if(hint){
       var show=!directSeen && gwOk!==false && hostAt>0;
@@ -208,6 +215,7 @@ export function renderSysStatus(root: HTMLElement, api: SysStatusApi): () => voi
       f.src=DIRECT_BASE+"/embed";
       root.appendChild(f);
       directFrame=f;
+      directTriedAt=Date.now();
     }catch(e){ /* the Gateway fallback still works */ }
   }
   function onDirect(ev){
