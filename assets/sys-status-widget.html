@@ -9,6 +9,8 @@
 #oa-sys .sp1{flex:1}
 #oa-sys .upd{color:var(--muted);font-size:11px;font-family:var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace)}
 #oa-sys .grid{display:grid;gap:10px;grid-template-columns:1fr}
+#oa-sys.is-stale .grid,#oa-sys.is-stale .corebox{opacity:.45;filter:saturate(.35)}
+#oa-sys.is-stale .upd{color:var(--danger)}
 #oa-sys .t{position:relative;display:flex;flex-direction:column;gap:3px;padding:11px 12px 0;border:1px solid var(--border);border-radius:13px;background:var(--card);min-width:0;overflow:hidden;transition:border-color .15s,box-shadow .15s}
 #oa-sys .t:hover,#oa-sys .m:hover{border-color:var(--border-strong);box-shadow:0 4px 16px rgba(0,0,0,.18)}
 #oa-sys .l{color:var(--muted);font-size:10.5px;letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -180,17 +182,34 @@
   // Connection state. A gateway restart or a dropped link must never leave the
   // card silent: the header keeps the last successful time and says it is
   // reconnecting until reads succeed again.
-  var fails=0, lastOkAt=null;
+  var fails=0, lastOkAt=null, staleTimer=null;
   function hms(d){ var p=function(n){return String(n).padStart(2,"0");}; return p(d.getHours())+":"+p(d.getMinutes())+":"+p(d.getSeconds()); }
-  function connOk(){ fails=0; lastOkAt=new Date(); }
-  function connBad(){ fails++; }
+  function outageText(){
+    if(!lastOkAt) return "尚未取到数据";
+    var sec=Math.max(0,Math.round((Date.now()-lastOkAt.getTime())/1000));
+    var m=Math.floor(sec/60), s=sec%60;
+    return "最后成功 "+hms(lastOkAt)+" · 已失联 "+m+"分"+(s<10?"0":"")+s+"秒";
+  }
+  function markStale(on){ if(root.classList) root.classList.toggle("is-stale", !!on); }
+  function startStaleClock(){
+    if(staleTimer) return;
+    markStale(true);
+    set("upd", outageText());
+    staleTimer=setInterval(function(){ set("upd", outageText()); }, 1000);
+  }
+  function stopStaleClock(){
+    if(staleTimer){ clearInterval(staleTimer); staleTimer=null; }
+    markStale(false);
+  }
+  function connOk(){ fails=0; lastOkAt=new Date(); stopStaleClock(); }
+  function connBad(){ fails++; if(fails>=2) startStaleClock(); }
   function render(){
-    set("upd", fails>0 ? ("最后成功 "+(lastOkAt?hms(lastOkAt):"—")) : ("实时 · "+hhmm()));
+    set("upd", fails>0 ? outageText() : ("实时 · "+hhmm()));
     set("scpu",(st.load?st.load:"—")+" · "+st.cores+" vCPU"+(st.busy!=null?" · 网关 "+st.busy+"%":""));
     set("smem", st.mem!=null?("已用 "+st.mem+"% · swap "+(st.swap||"—")):"—");
     set("snet", st.rx!=null?("↓ "+rate(st.rx)+" · ↑ "+rate(st.tx)):"—");
     set("sdisk", st.disk!=null?("已用 "+st.disk+"% · 可用 "+gb(st.diskAvail)):"—");
-    if(st.hostOk===false){ set("sdisk","指标端点未连通 · 检查 18575"); }
+    if(st.hostOk===false && fails===0){ set("sdisk","指标端点未连通 · 检查 18575"); }
   }
   async function hostTick(){
     try{
@@ -258,6 +277,7 @@
   return function stop(){
     for(var i=0;i<timers.length;i++) clearInterval(timers[i]);
     timers.length=0; clearTimeout(relayoutTimer);
+    stopStaleClock();
     document.removeEventListener("visibilitychange",onVisible);
     window.removeEventListener("online",onNetwork);
     window.removeEventListener("offline",onNetwork);
