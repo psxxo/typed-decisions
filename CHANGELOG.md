@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.6.9
+
+Targets OpenClaw 2026.9.9.
+
+- Control UI accessory: the appearance panel's button X/Y offset now moves the
+  placed box instead of transforming only the painted track. Before, the track
+  (the pill) was drawn at the nudged coordinate while the button box - the click
+  target and the native `title` tooltip anchor - stayed behind, so the left pill
+  and the empty space near the send button both toggled the switch, and the hint
+  appeared over the send area. Box, hit area, tooltip and paint now share one
+  coordinate.
+- The label keeps only the part of its offset that differs from the button's, so
+  existing saved appearances look the same while the hit area follows the switch.
+- The setup panel anchors to the switch itself rather than the accessory slot.
+- The accessory box is pinned to its content and only the switch receives pointer
+  events, so the host's full-row slot can no longer swallow clicks meant for the
+  send/mic controls.
+
 ## 1.6.8
 
 Local build. Host: OpenClaw 2026.9.9.
