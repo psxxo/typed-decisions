@@ -132,7 +132,27 @@ export function renderSysStatus(root: HTMLElement, api: SysStatusApi): () => voi
   // Connection state. A gateway restart or a dropped link must never leave the
   // card silent: the header keeps the last successful time and says it is
   // reconnecting until reads succeed again.
-  var fails=0, lastOkAt=null, staleTimer=null;
+  var fails=0, lastOkAt=null;
+  // Two independent sources. The sysmetrics service on :18575 runs in its own
+  // process and survives a Gateway restart; the board embeds it in a hidden
+  // iframe so the hardware tiles keep updating while the Gateway is down. The
+  // Gateway RPC remains the fallback for the first paint.
+  var DIRECT_BASE=(function(){ try{ return (location.protocol||"https:")+"//"+(location.hostname||"47.93.209.162")+":18575"; }catch(e){ return "https://47.93.209.162:18575"; } })();
+  var hostAt=0, gwOk=null, directFrame=null;
+  function hostFresh(){ return hostAt>0 && (Date.now()-hostAt)<7000; }
+  function badge(){
+    var dd=byId("gwdot");
+    if(dd) dd.className="dot "+(((gwOk===true)||hostFresh())?"ok":"danger");
+    if(gwOk===true){ set("gwbadge","正常"); return; }
+    if(gwOk===false && hostFresh()){ set("gwbadge","网关重启中 · 主机数据正常"); return; }
+    if(gwOk===false){ set("gwbadge","网关断开 · 重连中"); return; }
+    set("gwbadge","读取中…");
+  }
+  function beat(){
+    var fresh=hostFresh();
+    markStale(!fresh);
+    set("upd", fresh ? ("实时 · "+hhmm()) : outageText());
+  }
   function hms(d){ var p=function(n){return String(n).padStart(2,"0");}; return p(d.getHours())+":"+p(d.getMinutes())+":"+p(d.getSeconds()); }
   function outageText(){
     if(!lastOkAt) return "尚未取到数据";
@@ -141,53 +161,67 @@ export function renderSysStatus(root: HTMLElement, api: SysStatusApi): () => voi
     return "最后成功 "+hms(lastOkAt)+" · 已失联 "+m+"分"+(s<10?"0":"")+s+"秒";
   }
   function markStale(on){ if(root.classList) root.classList.toggle("is-stale", !!on); }
-  function startStaleClock(){
-    if(staleTimer) return;
-    markStale(true);
-    set("upd", outageText());
-    staleTimer=setInterval(function(){ set("upd", outageText()); }, 1000);
-  }
-  function stopStaleClock(){
-    if(staleTimer){ clearInterval(staleTimer); staleTimer=null; }
-    markStale(false);
-  }
-  function connOk(){ fails=0; lastOkAt=new Date(); stopStaleClock(); }
-  function connBad(){ fails++; if(fails>=2) startStaleClock(); }
   function render(){
-    set("upd", fails>0 ? outageText() : ("实时 · "+hhmm()));
+    set("upd", hostFresh() ? ("实时 · "+hhmm()) : outageText());
     set("scpu",(st.load?st.load:"—")+" · "+st.cores+" vCPU"+(st.busy!=null?" · 网关 "+st.busy+"%":""));
     set("smem", st.mem!=null?("已用 "+st.mem+"% · swap "+(st.swap||"—")):"—");
     set("snet", st.rx!=null?("↓ "+rate(st.rx)+" · ↑ "+rate(st.tx)):"—");
     set("sdisk", st.disk!=null?("已用 "+st.disk+"% · 可用 "+gb(st.diskAvail)):"—");
-    if(st.hostOk===false && fails===0){ set("sdisk","指标端点未连通 · 检查 18575"); }
+    if(st.hostOk===false && gwOk!==false){ set("sdisk","指标端点未连通 · 检查 18575"); }
   }
   async function hostTick(){
+    if(hostFresh()) return;
+    try{ applyMetrics(await gatewayMetrics()); }catch(e){ st.hostOk=false; }
+  }
+  async function gatewayMetrics(){
+    var d=await api.metrics();
+    return d;
+  }
+  function applyMetrics(d){
+    if(!d||!d.cpu||!d.mem) return;
+    hostAt=Date.now(); lastOkAt=new Date(); st.hostOk=true;
+    st.cores=d.cpu.cores;
+    if(typeof d.cpu.busyPct==="number"){ st.cpu=d.cpu.busyPct; push(hist.cpu,d.cpu.busyPct,CAP); set("vcpu",d.cpu.busyPct+"%"); spark(byId("ccpu"),hist.cpu); }
+    st.perCore=d.cpu.perCore||[]; renderCores(st.perCore);
+    if(d.cpu.load1!=null){ st.load=d.cpu.load1.toFixed(2)+" / "+d.cpu.load5.toFixed(2)+" / "+d.cpu.load15.toFixed(2); }
+    if(d.mem.usedPct!=null){ st.mem=d.mem.usedPct; push(hist.mem,d.mem.usedPct,CAP); set("vmem",gb(d.mem.usedBytes)+"/"+gb(d.mem.totalBytes)); spark(byId("cmem"),hist.mem); }
+    if(d.swap) st.swap=gb(d.swap.usedBytes);
+    if(d.net){ st.rx=d.net.rxBps; st.tx=d.net.txBps; var tot=(d.net.rxBps||0)+(d.net.txBps||0); push(hist.net,tot,CAP); set("vnet",rate(tot)); spark(byId("cnet"),hist.net); }
+    if(d.disk){ st.disk=d.disk.usedPct; st.diskAvail=d.disk.availableBytes; push(hist.disk,d.disk.usedPct,CAP); set("vdisk",gb(d.disk.totalBytes)); spark(byId("cdisk"),hist.disk); }
+  }
+  function startDirect(){
+    if(directFrame) return;
     try{
-      var d=await api.metrics(); st.hostOk=true;
-      st.cores=d.cpu.cores;
-      if(typeof d.cpu.busyPct==="number"){ st.cpu=d.cpu.busyPct; push(hist.cpu,d.cpu.busyPct,CAP); set("vcpu",d.cpu.busyPct+"%"); spark(byId("ccpu"),hist.cpu); }
-      st.perCore=d.cpu.perCore||[]; renderCores(st.perCore);
-      st.load=d.cpu.load1.toFixed(2)+" / "+d.cpu.load5.toFixed(2)+" / "+d.cpu.load15.toFixed(2);
-      st.mem=d.mem.usedPct; push(hist.mem,d.mem.usedPct,CAP); set("vmem",gb(d.mem.usedBytes)+"/"+gb(d.mem.totalBytes)); spark(byId("cmem"),hist.mem);
-      st.swap=gb(d.swap.usedBytes);
-      if(d.net){ st.rx=d.net.rxBps; st.tx=d.net.txBps; var tot=(d.net.rxBps||0)+(d.net.txBps||0); push(hist.net,tot,CAP); set("vnet",rate(tot)); spark(byId("cnet"),hist.net); }
-      if(d.disk){ st.disk=d.disk.usedPct; st.diskAvail=d.disk.availableBytes; push(hist.disk,d.disk.usedPct,CAP); set("vdisk",gb(d.disk.totalBytes)); spark(byId("cdisk"),hist.disk); }
-    }catch(e){ st.hostOk=false; }
+      var f=document.createElement("iframe");
+      f.setAttribute("aria-hidden","true");
+      f.tabIndex=-1;
+      f.title="host metrics";
+      f.style.cssText="position:absolute;width:0;height:0;border:0;opacity:0;pointer-events:none";
+      f.src=DIRECT_BASE+"/embed";
+      root.appendChild(f);
+      directFrame=f;
+    }catch(e){ /* the Gateway fallback still works */ }
+  }
+  function onDirect(ev){
+    if(!directFrame || ev.source!==directFrame.contentWindow) return;
+    if(ev.origin!==DIRECT_BASE) return;
+    var m=ev.data;
+    if(!m || m.type!=="sysmetrics.metrics" || !m.data) return;
+    applyMetrics(m.data); render();
   }
   async function fastTick(){
-    if(!rd){ set("gwbadge","未授权"); } else try{
+    if(!rd){ gwOk=false; } else try{
       var H=await rd("health");
       var ok=H&&H.running!==false&&H.connected!==false;
-      if(ok){ connOk(); } else { connBad(); }
-      set("gwbadge", ok?"正常":((H&&(H.lifecycle||H.status))||"未知"));
-      var dd=byId("gwdot"); if(dd) dd.className="dot "+(ok?"ok":"danger");
+      gwOk=!!ok;
+      var dd=byId("gwdot"); if(dd) dd.className="dot "+((ok||hostFresh())?"ok":"danger");
       var el=(H&&H.eventLoop)||{};
       var u=el.eventLoopUtilization; if(typeof u!=="number") u=el.utilization;
       if(typeof u==="number"){ if(u>0&&u<=1)u=u*100; st.busy=Math.round(u); }
       var q=el.p99Ms; if(typeof q!=="number") q=el.delayP99Ms;
       if(typeof q==="number"){ maxP99=Math.max(maxP99,q); push(hist.p99,Math.round(q),CAP); set("vp99",Math.round(q)+" ms"); set("sp99","最大 "+Math.round(maxP99)+" ms"); spark(byId("cp99"),hist.p99); }
       var ch=H&&H.channels; if(ch&&typeof ch==="object"){var ids=Object.keys(ch),on=ids.filter(function(k){var c=ch[k]||{};return c.running!==false&&c.connected!==false;}).length; set("vchan",on+"/"+ids.length);} else set("vchan","—");
-    }catch(e){ connBad(); set("gwbadge", fails>=2?("网关断开 · 重连中"):"读取失败"); }
+    }catch(e){ gwOk=false; }
     render();
   }
   async function slowTick(){
@@ -215,7 +249,10 @@ export function renderSysStatus(root: HTMLElement, api: SysStatusApi): () => voi
   function refreshAll(){ hostTick(); fastTick(); slowTick(); }
   function onVisible(){ if(!document.hidden) refreshAll(); }
   function onNetwork(){ refreshAll(); }
+  window.addEventListener("message",onDirect);
+  startDirect();
   var timers=[setInterval(hostTick,3000), setInterval(fastTick,3000), setInterval(slowTick,3000)];
+  var beatTimer=setInterval(beat,1000);
   var relayoutTimer=setTimeout(relayout,250);
   document.addEventListener("visibilitychange",onVisible);
   window.addEventListener("online",onNetwork);
@@ -225,8 +262,9 @@ export function renderSysStatus(root: HTMLElement, api: SysStatusApi): () => voi
   // so a host unmount cannot leave an emptied widget behind.
   return function stop(){
     for(var i=0;i<timers.length;i++) clearInterval(timers[i]);
-    timers.length=0; clearTimeout(relayoutTimer);
-    stopStaleClock();
+    timers.length=0; clearInterval(beatTimer); clearTimeout(relayoutTimer);
+    window.removeEventListener("message",onDirect);
+    if(directFrame){ try{ directFrame.remove(); }catch(e){} directFrame=null; }
     document.removeEventListener("visibilitychange",onVisible);
     window.removeEventListener("online",onNetwork);
     window.removeEventListener("offline",onNetwork);

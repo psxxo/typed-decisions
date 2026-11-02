@@ -317,7 +317,40 @@ function renderSysStatus(root, api) {
     }
   }
   var rd = api.read;
-  var fails = 0, lastOkAt = null, staleTimer = null;
+  var fails = 0, lastOkAt = null;
+  var DIRECT_BASE = (function() {
+    try {
+      return (location.protocol || "https:") + "//" + (location.hostname || "47.93.209.162") + ":18575";
+    } catch (e) {
+      return "https://47.93.209.162:18575";
+    }
+  })();
+  var hostAt = 0, gwOk = null, directFrame = null;
+  function hostFresh() {
+    return hostAt > 0 && Date.now() - hostAt < 7e3;
+  }
+  function badge() {
+    var dd = byId("gwdot");
+    if (dd) dd.className = "dot " + (gwOk === true || hostFresh() ? "ok" : "danger");
+    if (gwOk === true) {
+      set("gwbadge", "\u6B63\u5E38");
+      return;
+    }
+    if (gwOk === false && hostFresh()) {
+      set("gwbadge", "\u7F51\u5173\u91CD\u542F\u4E2D \xB7 \u4E3B\u673A\u6570\u636E\u6B63\u5E38");
+      return;
+    }
+    if (gwOk === false) {
+      set("gwbadge", "\u7F51\u5173\u65AD\u5F00 \xB7 \u91CD\u8FDE\u4E2D");
+      return;
+    }
+    set("gwbadge", "\u8BFB\u53D6\u4E2D\u2026");
+  }
+  function beat() {
+    var fresh = hostFresh();
+    markStale(!fresh);
+    set("upd", fresh ? "\u5B9E\u65F6 \xB7 " + hhmm() : outageText());
+  }
   function hms(d) {
     var p = function(n) {
       return String(n).padStart(2, "0");
@@ -333,92 +366,99 @@ function renderSysStatus(root, api) {
   function markStale(on) {
     if (root.classList) root.classList.toggle("is-stale", !!on);
   }
-  function startStaleClock() {
-    if (staleTimer) return;
-    markStale(true);
-    set("upd", outageText());
-    staleTimer = setInterval(function() {
-      set("upd", outageText());
-    }, 1e3);
-  }
-  function stopStaleClock() {
-    if (staleTimer) {
-      clearInterval(staleTimer);
-      staleTimer = null;
-    }
-    markStale(false);
-  }
-  function connOk() {
-    fails = 0;
-    lastOkAt = /* @__PURE__ */ new Date();
-    stopStaleClock();
-  }
-  function connBad() {
-    fails++;
-    if (fails >= 2) startStaleClock();
-  }
   function render() {
-    set("upd", fails > 0 ? outageText() : "\u5B9E\u65F6 \xB7 " + hhmm());
+    set("upd", hostFresh() ? "\u5B9E\u65F6 \xB7 " + hhmm() : outageText());
     set("scpu", (st.load ? st.load : "\u2014") + " \xB7 " + st.cores + " vCPU" + (st.busy != null ? " \xB7 \u7F51\u5173 " + st.busy + "%" : ""));
     set("smem", st.mem != null ? "\u5DF2\u7528 " + st.mem + "% \xB7 swap " + (st.swap || "\u2014") : "\u2014");
     set("snet", st.rx != null ? "\u2193 " + rate(st.rx) + " \xB7 \u2191 " + rate(st.tx) : "\u2014");
     set("sdisk", st.disk != null ? "\u5DF2\u7528 " + st.disk + "% \xB7 \u53EF\u7528 " + gb(st.diskAvail) : "\u2014");
-    if (st.hostOk === false && fails === 0) {
+    if (st.hostOk === false && gwOk !== false) {
       set("sdisk", "\u6307\u6807\u7AEF\u70B9\u672A\u8FDE\u901A \xB7 \u68C0\u67E5 18575");
     }
   }
   async function hostTick() {
+    if (hostFresh()) return;
     try {
-      var d = await api.metrics();
-      st.hostOk = true;
-      st.cores = d.cpu.cores;
-      if (typeof d.cpu.busyPct === "number") {
-        st.cpu = d.cpu.busyPct;
-        push(hist.cpu, d.cpu.busyPct, CAP);
-        set("vcpu", d.cpu.busyPct + "%");
-        spark(byId("ccpu"), hist.cpu);
-      }
-      st.perCore = d.cpu.perCore || [];
-      renderCores(st.perCore);
-      st.load = d.cpu.load1.toFixed(2) + " / " + d.cpu.load5.toFixed(2) + " / " + d.cpu.load15.toFixed(2);
-      st.mem = d.mem.usedPct;
-      push(hist.mem, d.mem.usedPct, CAP);
-      set("vmem", gb(d.mem.usedBytes) + "/" + gb(d.mem.totalBytes));
-      spark(byId("cmem"), hist.mem);
-      st.swap = gb(d.swap.usedBytes);
-      if (d.net) {
-        st.rx = d.net.rxBps;
-        st.tx = d.net.txBps;
-        var tot = (d.net.rxBps || 0) + (d.net.txBps || 0);
-        push(hist.net, tot, CAP);
-        set("vnet", rate(tot));
-        spark(byId("cnet"), hist.net);
-      }
-      if (d.disk) {
-        st.disk = d.disk.usedPct;
-        st.diskAvail = d.disk.availableBytes;
-        push(hist.disk, d.disk.usedPct, CAP);
-        set("vdisk", gb(d.disk.totalBytes));
-        spark(byId("cdisk"), hist.disk);
-      }
+      applyMetrics(await gatewayMetrics());
     } catch (e) {
       st.hostOk = false;
     }
   }
+  async function gatewayMetrics() {
+    var d = await api.metrics();
+    return d;
+  }
+  function applyMetrics(d) {
+    if (!d || !d.cpu || !d.mem) return;
+    hostAt = Date.now();
+    lastOkAt = /* @__PURE__ */ new Date();
+    st.hostOk = true;
+    st.cores = d.cpu.cores;
+    if (typeof d.cpu.busyPct === "number") {
+      st.cpu = d.cpu.busyPct;
+      push(hist.cpu, d.cpu.busyPct, CAP);
+      set("vcpu", d.cpu.busyPct + "%");
+      spark(byId("ccpu"), hist.cpu);
+    }
+    st.perCore = d.cpu.perCore || [];
+    renderCores(st.perCore);
+    if (d.cpu.load1 != null) {
+      st.load = d.cpu.load1.toFixed(2) + " / " + d.cpu.load5.toFixed(2) + " / " + d.cpu.load15.toFixed(2);
+    }
+    if (d.mem.usedPct != null) {
+      st.mem = d.mem.usedPct;
+      push(hist.mem, d.mem.usedPct, CAP);
+      set("vmem", gb(d.mem.usedBytes) + "/" + gb(d.mem.totalBytes));
+      spark(byId("cmem"), hist.mem);
+    }
+    if (d.swap) st.swap = gb(d.swap.usedBytes);
+    if (d.net) {
+      st.rx = d.net.rxBps;
+      st.tx = d.net.txBps;
+      var tot = (d.net.rxBps || 0) + (d.net.txBps || 0);
+      push(hist.net, tot, CAP);
+      set("vnet", rate(tot));
+      spark(byId("cnet"), hist.net);
+    }
+    if (d.disk) {
+      st.disk = d.disk.usedPct;
+      st.diskAvail = d.disk.availableBytes;
+      push(hist.disk, d.disk.usedPct, CAP);
+      set("vdisk", gb(d.disk.totalBytes));
+      spark(byId("cdisk"), hist.disk);
+    }
+  }
+  function startDirect() {
+    if (directFrame) return;
+    try {
+      var f = document.createElement("iframe");
+      f.setAttribute("aria-hidden", "true");
+      f.tabIndex = -1;
+      f.title = "host metrics";
+      f.style.cssText = "position:absolute;width:0;height:0;border:0;opacity:0;pointer-events:none";
+      f.src = DIRECT_BASE + "/embed";
+      root.appendChild(f);
+      directFrame = f;
+    } catch (e) {
+    }
+  }
+  function onDirect(ev) {
+    if (!directFrame || ev.source !== directFrame.contentWindow) return;
+    if (ev.origin !== DIRECT_BASE) return;
+    var m = ev.data;
+    if (!m || m.type !== "sysmetrics.metrics" || !m.data) return;
+    applyMetrics(m.data);
+    render();
+  }
   async function fastTick() {
     if (!rd) {
-      set("gwbadge", "\u672A\u6388\u6743");
+      gwOk = false;
     } else try {
       var H = await rd("health");
       var ok = H && H.running !== false && H.connected !== false;
-      if (ok) {
-        connOk();
-      } else {
-        connBad();
-      }
-      set("gwbadge", ok ? "\u6B63\u5E38" : H && (H.lifecycle || H.status) || "\u672A\u77E5");
+      gwOk = !!ok;
       var dd = byId("gwdot");
-      if (dd) dd.className = "dot " + (ok ? "ok" : "danger");
+      if (dd) dd.className = "dot " + (ok || hostFresh() ? "ok" : "danger");
       var el = H && H.eventLoop || {};
       var u = el.eventLoopUtilization;
       if (typeof u !== "number") u = el.utilization;
@@ -444,8 +484,7 @@ function renderSysStatus(root, api) {
         set("vchan", on + "/" + ids.length);
       } else set("vchan", "\u2014");
     } catch (e) {
-      connBad();
-      set("gwbadge", fails >= 2 ? "\u7F51\u5173\u65AD\u5F00 \xB7 \u91CD\u8FDE\u4E2D" : "\u8BFB\u53D6\u5931\u8D25");
+      gwOk = false;
     }
     render();
   }
@@ -537,7 +576,10 @@ function renderSysStatus(root, api) {
   function onNetwork() {
     refreshAll();
   }
+  window.addEventListener("message", onDirect);
+  startDirect();
   var timers = [setInterval(hostTick, 3e3), setInterval(fastTick, 3e3), setInterval(slowTick, 3e3)];
+  var beatTimer = setInterval(beat, 1e3);
   var relayoutTimer = setTimeout(relayout, 250);
   document.addEventListener("visibilitychange", onVisible);
   window.addEventListener("online", onNetwork);
@@ -547,8 +589,16 @@ function renderSysStatus(root, api) {
   return function stop() {
     for (var i = 0; i < timers.length; i++) clearInterval(timers[i]);
     timers.length = 0;
+    clearInterval(beatTimer);
     clearTimeout(relayoutTimer);
-    stopStaleClock();
+    window.removeEventListener("message", onDirect);
+    if (directFrame) {
+      try {
+        directFrame.remove();
+      } catch (e) {
+      }
+      directFrame = null;
+    }
     document.removeEventListener("visibilitychange", onVisible);
     window.removeEventListener("online", onNetwork);
     window.removeEventListener("offline", onNetwork);
