@@ -576,6 +576,25 @@ export default defineControlUiPlugin({
       console.warn("[typed-decisions] sys-status board widget unavailable", error);
     }
 
+    // A service restart drops the websocket and re-activates this plugin while
+    // the board keeps the old DOM. Restart any stopped widget loop as soon as
+    // the link is back, so recovery does not depend on a page refresh.
+    try {
+      host.subscribe(() => {
+        if (!host.connection.connected) return;
+        for (const mount of sysStatusMounts) {
+          if (!mount.container.isConnected || mount.stop) continue;
+          try {
+            startSysStatus(mount);
+          } catch {
+            // Host still settling; the watchdog retries.
+          }
+        }
+      });
+    } catch {
+      // The connection subscription is optional.
+    }
+
     host.ui.registerAccessory({
       id: "decision-intervention",
       placement: "session-header",
