@@ -138,7 +138,7 @@ const STYLE = `
   padding: 3px 6px; border: 0; outline: none;
   background: transparent; color: inherit;
   font: inherit; font-size: 12px; line-height: 1.4;
-  cursor: pointer; user-select: none;
+  cursor: pointer; user-select: none; pointer-events: auto;
 }
 .td-switch:disabled { cursor: progress; opacity: .7; }
 .td-switch:focus-visible { outline: 2px solid #4c8dff; outline-offset: 1px; border-radius: 999px; }
@@ -160,7 +160,7 @@ const STYLE = `
   border: 1px solid rgba(127,127,127,.28);
   box-shadow: 0 12px 32px rgba(0,0,0,.28);
   font: 12px/1.5 var(--font-body, system-ui, sans-serif);
-  z-index: 2147483001;
+  z-index: 2147483001; pointer-events: auto;
 }
 .td-setup[hidden] { display: none; }
 .td-setup-title { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
@@ -513,6 +513,15 @@ export default defineControlUiPlugin({
         let frame = 0;
 
         const root = container.attachShadow ? container.attachShadow({ mode: "open" }) : container;
+        // The host accessory is a full-row box; once fixed-positioned, its
+        // invisible width would stretch to the composer's right controls and
+        // swallow clicks meant for send/mic. Pin the box to its content and
+        // let only the switch and the setup panel receive pointer events.
+        container.style.setProperty("width", "max-content", "important");
+        container.style.setProperty("height", "max-content", "important");
+        container.style.setProperty("pointer-events", "none", "important");
+        container.style.setProperty("right", "auto", "important");
+        container.style.setProperty("bottom", "auto", "important");
         const style = document.createElement("style");
         style.textContent = STYLE;
         const button = document.createElement("button");
@@ -597,11 +606,16 @@ export default defineControlUiPlugin({
         /** Paint the saved values onto the switch's own parts. */
         const paintStyle = () => {
           button.style.fontSize = `${liveStyle.fontSize}px`;
-          // The track (the toggle itself) and the label move independently, so
-          // the owner can align the text with the pill without dragging the
-          // control's hit area with it.
-          track.style.transform = `translate(${liveStyle.buttonDx}px, ${liveStyle.buttonDy}px)`;
-          label.style.transform = `translate(${liveStyle.labelDx}px, ${liveStyle.labelDy}px)`;
+          // The button offset is folded into the placed BOX (see `place`), not
+          // applied as a transform. Nudging only the painted track moved the
+          // pixels while the real box — the click target and the native title
+          // tooltip anchor — stayed at the old coordinate: empty space near
+          // the send button toggled the switch and the hint popped up there.
+          // Moving the box keeps paint, hit area and tooltip on one pixel.
+          button.style.transform = "";
+          // The label rides with the box, so only the part of its offset that
+          // differs from the button's remains, measured from the same origin.
+          label.style.transform = `translate(${liveStyle.labelDx - liveStyle.buttonDx}px, ${liveStyle.labelDy - liveStyle.buttonDy}px)`;
         };
 
         /** Push the in-memory appearance onto the control and re-place it. */
@@ -618,7 +632,9 @@ export default defineControlUiPlugin({
         /** Anchor the panel above the switch so it never covers the control. */
         const positionSetup = () => {
           if (setup.hidden) return;
-          const rect = container.getBoundingClientRect();
+          // Anchor to the switch the owner can see, not to the accessory slot:
+          // the button carries the nudge, so the container box may sit elsewhere.
+          const rect = button.getBoundingClientRect();
           setup.style.left = `${Math.round(Math.max(8, Math.min(rect.left, window.innerWidth - 284)))}px`;
           setup.style.bottom = `${Math.round(window.innerHeight - rect.top + 8)}px`;
         };
@@ -752,8 +768,10 @@ export default defineControlUiPlugin({
           state.placement = {
             anchored: true,
             offset: { ...state.placement.offset },
-            left: round1(target.left + liveStyle.dx),
-            top: round1(target.top + liveStyle.dy),
+            // The per-part button nudge is part of the box position, so the
+            // hit area and the tooltip travel with the switch.
+            left: round1(target.left + liveStyle.dx + liveStyle.buttonDx),
+            top: round1(target.top + liveStyle.dy + liveStyle.buttonDy),
             anchor: target.label,
           };
           state.reason = target.label;

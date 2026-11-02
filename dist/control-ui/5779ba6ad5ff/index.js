@@ -545,7 +545,7 @@ var STYLE = `
   padding: 3px 6px; border: 0; outline: none;
   background: transparent; color: inherit;
   font: inherit; font-size: 12px; line-height: 1.4;
-  cursor: pointer; user-select: none;
+  cursor: pointer; user-select: none; pointer-events: auto;
 }
 .td-switch:disabled { cursor: progress; opacity: .7; }
 .td-switch:focus-visible { outline: 2px solid #4c8dff; outline-offset: 1px; border-radius: 999px; }
@@ -567,7 +567,7 @@ var STYLE = `
   border: 1px solid rgba(127,127,127,.28);
   box-shadow: 0 12px 32px rgba(0,0,0,.28);
   font: 12px/1.5 var(--font-body, system-ui, sans-serif);
-  z-index: 2147483001;
+  z-index: 2147483001; pointer-events: auto;
 }
 .td-setup[hidden] { display: none; }
 .td-setup-title { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
@@ -822,6 +822,11 @@ var control_ui_default = defineControlUiPlugin({
         let probeDeadline = 0;
         let frame = 0;
         const root = container.attachShadow ? container.attachShadow({ mode: "open" }) : container;
+        container.style.setProperty("width", "max-content", "important");
+        container.style.setProperty("height", "max-content", "important");
+        container.style.setProperty("pointer-events", "none", "important");
+        container.style.setProperty("right", "auto", "important");
+        container.style.setProperty("bottom", "auto", "important");
         const style = document.createElement("style");
         style.textContent = STYLE;
         const button = document.createElement("button");
@@ -895,8 +900,8 @@ var control_ui_default = defineControlUiPlugin({
         });
         const paintStyle = () => {
           button.style.fontSize = `${liveStyle.fontSize}px`;
-          track.style.transform = `translate(${liveStyle.buttonDx}px, ${liveStyle.buttonDy}px)`;
-          label.style.transform = `translate(${liveStyle.labelDx}px, ${liveStyle.labelDy}px)`;
+          button.style.transform = "";
+          label.style.transform = `translate(${liveStyle.labelDx - liveStyle.buttonDx}px, ${liveStyle.labelDy - liveStyle.buttonDy}px)`;
         };
         const applyStyle = () => {
           paintStyle();
@@ -907,7 +912,7 @@ var control_ui_default = defineControlUiPlugin({
         paintStyle();
         const positionSetup = () => {
           if (setup.hidden) return;
-          const rect = container.getBoundingClientRect();
+          const rect = button.getBoundingClientRect();
           setup.style.left = `${Math.round(Math.max(8, Math.min(rect.left, window.innerWidth - 284)))}px`;
           setup.style.bottom = `${Math.round(window.innerHeight - rect.top + 8)}px`;
         };
@@ -1018,8 +1023,10 @@ var control_ui_default = defineControlUiPlugin({
           state.placement = {
             anchored: true,
             offset: { ...state.placement.offset },
-            left: round1(target.left + liveStyle.dx),
-            top: round1(target.top + liveStyle.dy),
+            // The per-part button nudge is part of the box position, so the
+            // hit area and the tooltip travel with the switch.
+            left: round1(target.left + liveStyle.dx + liveStyle.buttonDx),
+            top: round1(target.top + liveStyle.dy + liveStyle.buttonDy),
             anchor: target.label
           };
           state.reason = target.label;
