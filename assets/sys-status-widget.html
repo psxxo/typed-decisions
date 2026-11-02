@@ -9,10 +9,6 @@
 #oa-sys .sp1{flex:1}
 #oa-sys .upd{color:var(--muted);font-size:11px;font-family:var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace)}
 #oa-sys .grid{display:grid;gap:10px;grid-template-columns:1fr}
-#oa-sys.is-stale .grid,#oa-sys.is-stale .corebox{opacity:.45;filter:saturate(.35)}
-#oa-sys.is-stale .upd{color:var(--danger)}
-#oa-sys .hint{display:none;padding:8px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--muted);font-size:11px;line-height:1.55;word-break:break-all}
-#oa-sys .hint.on{display:block}
 #oa-sys .t{position:relative;display:flex;flex-direction:column;gap:3px;padding:11px 12px 0;border:1px solid var(--border);border-radius:13px;background:var(--card);min-width:0;overflow:hidden;transition:border-color .15s,box-shadow .15s}
 #oa-sys .t:hover,#oa-sys .m:hover{border-color:var(--border-strong);box-shadow:0 4px 16px rgba(0,0,0,.18)}
 #oa-sys .l{color:var(--muted);font-size:10.5px;letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -41,7 +37,6 @@
 #oa-sys .sec:after{content:"";flex:1;height:1px;background:var(--border)}
 </style>
 <div class="hd"><span class="dot" id="gwdot"></span><span class="ttl">系统状态</span><span class="badge" id="gwbadge">读取中…</span><span class="sp1"></span><span class="upd" id="upd">—</span></div>
-<div class="hint" id="hint"></div>
 <div class="grid" id="gmain">
   <div class="t" data-tip="cpu"><span class="l">CPU 宿主 · 实时</span><span class="v" id="vcpu">—</span><span class="s" id="scpu">—</span><div class="chart" id="ccpu"></div></div>
   <div class="t" data-tip="cores"><span class="l">CPU 各核 · 实时</span><div class="corebox" id="corebox"></div></div>
@@ -203,7 +198,6 @@
   }
   function beat(){
     var fresh=hostFresh();
-    markStale(!fresh);
     set("upd", fresh ? ("实时 · "+hhmm()) : outageText());
     // A frame that failed before the certificate was accepted stays failed.
     // Rebuild it every 20s until it delivers.
@@ -211,14 +205,6 @@
       try{ if(directFrame) directFrame.remove(); }catch(e){}
       directFrame=null;
       startDirect();
-    }
-    var hint=byId("hint");
-    if(hint){
-      var show=!directSeen && gwOk!==false && hostAt>0;
-      if(show){
-        hint.textContent="直连指标未生效：新标签页打开 "+DIRECT_BASE+"/ 接受一次证书后刷新本页。现在数值仍由网关代取，网关重启时会暂停。";
-        hint.className="hint on";
-      } else hint.className="hint";
     }
   }
   function hms(d){ var p=function(n){return String(n).padStart(2,"0");}; return p(d.getHours())+":"+p(d.getMinutes())+":"+p(d.getSeconds()); }
@@ -228,7 +214,6 @@
     var m=Math.floor(sec/60), s=sec%60;
     return "最后成功 "+hms(lastOkAt)+" · 已失联 "+m+"分"+(s<10?"0":"")+s+"秒";
   }
-  function markStale(on){ if(root.classList) root.classList.toggle("is-stale", !!on); }
   function render(){
     set("upd", hostFresh() ? ("实时 · "+hhmm()) : outageText());
     set("scpu",(st.load?st.load:"—")+" · "+st.cores+" vCPU"+(st.busy!=null?" · 网关 "+st.busy+"%":""));
