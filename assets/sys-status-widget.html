@@ -303,22 +303,43 @@
     tip.style.left=tl+"px"; tip.style.top=tt+"px"; });
   root.addEventListener("mouseout",function(ev){ var t=ev.target.closest?ev.target.closest("[data-tip]"):null; if(t) tip.style.display="none"; });
   function refreshAll(){ hostTick(); fastTick(); slowTick(); }
-  function onVisible(){ if(!document.hidden) refreshAll(); }
-  function onNetwork(){ refreshAll(); }
+  function onNetwork(){ if(!document.hidden) refreshAll(); }
+  // Only the page the operator is actually looking at polls. Hidden tabs and
+  // widgets scrolled out of view stop their timers, so a dozen open sessions
+  // no longer multiply the gateway load.
+  var timers=[], beatTimer=0, relayoutTimer=setTimeout(relayout,250), onScreen=true;
+  function startPolling(){
+    if(timers.length) return;
+    refreshAll(); render();
+    timers=[setInterval(hostTick,3000), setInterval(fastTick,3000), setInterval(slowTick,3000)];
+    beatTimer=setInterval(beat,1000);
+  }
+  function stopPolling(){
+    for(var i=0;i<timers.length;i++) clearInterval(timers[i]);
+    timers.length=0;
+    if(beatTimer){ clearInterval(beatTimer); beatTimer=0; }
+  }
+  function syncPolling(){ if(!document.hidden && onScreen) startPolling(); else stopPolling(); }
+  function onVisible(){ syncPolling(); }
   window.addEventListener("message",onDirect);
   startDirect();
-  var timers=[setInterval(hostTick,3000), setInterval(fastTick,3000), setInterval(slowTick,3000)];
-  var beatTimer=setInterval(beat,1000);
-  var relayoutTimer=setTimeout(relayout,250);
   document.addEventListener("visibilitychange",onVisible);
   window.addEventListener("online",onNetwork);
   window.addEventListener("offline",onNetwork);
-  refreshAll(); render();
+  try{
+    if(window.IntersectionObserver){
+      new IntersectionObserver(function(entries){
+        for(var i=0;i<entries.length;i++) onScreen=entries[i].isIntersecting;
+        syncPolling();
+      },{threshold:0.01}).observe(root);
+    }
+  }catch(e){}
+  syncPolling();
   // Returned to the mount wrapper: stops timers/listeners without touching DOM,
   // so a host unmount cannot leave an emptied widget behind.
   return function stop(){
-    for(var i=0;i<timers.length;i++) clearInterval(timers[i]);
-    timers.length=0; clearInterval(beatTimer); clearTimeout(relayoutTimer);
+    stopPolling();
+    clearTimeout(relayoutTimer);
     window.removeEventListener("message",onDirect);
     if(directFrame){ try{ directFrame.remove(); }catch(e){} directFrame=null; }
     document.removeEventListener("visibilitychange",onVisible);
