@@ -447,9 +447,76 @@ import { SYS_STATUS_MARKUP, renderSysStatus } from "./generated-sys-status-html.
 /** Same-origin plugin method the widget reads host metrics through. */
 const METRICS_METHOD = "typed-decisions.metrics";
 
+/**
+ * Current activation's host. Widget reads go through it instead of a captured
+ * closure, so a reconnect that re-activates the plugin keeps working even when
+ * the board does not remount the widget.
+ */
+let activeHost: ControlUiHost | null = null;
+
+type SysStatusMount = {
+  container: HTMLElement;
+  scope: ShadowRoot | HTMLElement;
+  el: HTMLElement;
+  stop: (() => void) | null;
+};
+
+const sysStatusMounts = new Set<SysStatusMount>();
+let sysStatusWatchdog: ReturnType<typeof setInterval> | undefined;
+
+function requireHost(): ControlUiHost {
+  if (!activeHost) throw new Error("插件宿主尚未就绪");
+  return activeHost;
+}
+
+function startSysStatus(mount: SysStatusMount): void {
+  mount.stop?.();
+  mount.stop = renderSysStatus(mount.el, {
+    read: (id, params) => requireHost().request(id, params ?? {}),
+    metrics: () => requireHost().request(METRICS_METHOD),
+  });
+}
+
+/**
+ * Self-heal. A host unmount can clear the container, and a Gateway restart ends
+ * the activation that mounted the widget; either way the card must not stay
+ * blank. Re-attach the root, rebuild the markup if it was wiped, and restart
+ * the polling loop whenever it has stopped.
+ */
+function ensureSysStatusWatchdog(): void {
+  if (sysStatusWatchdog) return;
+  sysStatusWatchdog = setInterval(() => {
+    for (const mount of sysStatusMounts) {
+      if (!mount.container.isConnected) {
+        mount.stop?.();
+        mount.stop = null;
+        sysStatusMounts.delete(mount);
+        continue;
+      }
+      if (!mount.el.isConnected) mount.scope.appendChild(mount.el);
+      if (!mount.el.querySelector("[id=gwbadge]")) {
+        mount.stop?.();
+        mount.stop = null;
+        mount.scope.innerHTML = SYS_STATUS_MARKUP;
+        const rebuilt = mount.scope.querySelector('[id="oa-sys"]') as HTMLElement | null;
+        if (!rebuilt) continue;
+        mount.el = rebuilt;
+      }
+      if (!mount.stop) {
+        try {
+          startSysStatus(mount);
+        } catch {
+          // Host not ready yet; the next tick retries.
+        }
+      }
+    }
+  }, 4000);
+}
+
 export default defineControlUiPlugin({
   id: PLUGIN_ID,
   activate(host: ControlUiHost) {
+    activeHost = host;
     const probe = registry();
     const state = probe.state;
 
@@ -470,20 +537,39 @@ export default defineControlUiPlugin({
           // `var(--font-body)` keep resolving. The logic ships in this bundle
           // because the page CSP is `script-src 'self'`, and data comes from
           // the plugin host because `connect-src` excludes the metrics origin.
-          const root: HTMLElement | ShadowRoot = container.attachShadow
-            ? container.attachShadow({ mode: "open" })
-            : container;
-          root.innerHTML = SYS_STATUS_MARKUP;
-          const widget = root.querySelector('[id="oa-sys"]') as HTMLElement | null;
+          const scope: ShadowRoot | HTMLElement = container.shadowRoot
+            ?? (container.attachShadow ? container.attachShadow({ mode: "open" }) : container);
+          let widget = scope.querySelector('[id="oa-sys"]') as HTMLElement | null;
+          if (!widget) {
+            scope.innerHTML = SYS_STATUS_MARKUP;
+            widget = scope.querySelector('[id="oa-sys"]') as HTMLElement | null;
+          }
           if (!widget) {
             container.textContent = "系统监控组件挂载失败：找不到根节点。";
             return;
           }
-          renderSysStatus(widget, {
-            read: (id, params) => host.request(id, params ?? {}),
-            metrics: () => host.request(METRICS_METHOD),
-          });
-          return { dispose() { root.innerHTML = ""; } };
+          const existing = [...sysStatusMounts].find((entry) => entry.el === widget);
+          const mount: SysStatusMount = existing ?? { container, scope, el: widget, stop: null };
+          mount.container = container;
+          mount.scope = scope;
+          mount.el = widget;
+          if (!existing) sysStatusMounts.add(mount);
+          try {
+            startSysStatus(mount);
+          } catch (error) {
+            container.textContent = "系统监控组件启动失败：" + String((error as Error)?.message ?? error);
+          }
+          ensureSysStatusWatchdog();
+          return {
+            // Keep the markup on unmount. Clearing it here is what turned a
+            // Gateway restart into a permanently blank card: the host disposes
+            // the widget, and nothing guaranteed a remount. The watchdog
+            // restarts the polling loop and rebuilds the markup if it was lost.
+            dispose() {
+              mount.stop?.();
+              mount.stop = null;
+            },
+          };
         },
       });
     } catch (error) {

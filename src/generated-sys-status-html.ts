@@ -5,7 +5,7 @@ export type SysStatusApi = {
   read: (id: string, params?: Record<string, unknown>) => Promise<unknown>;
   metrics: () => Promise<unknown>;
 };
-export function renderSysStatus(root: HTMLElement, api: SysStatusApi): void {
+export function renderSysStatus(root: HTMLElement, api: SysStatusApi): () => void {
   const byId = (id: string) => root.querySelector('[id="' + id + '"]') as HTMLElement | null;
 
   
@@ -129,8 +129,15 @@ export function renderSysStatus(root: HTMLElement, api: SysStatusApi): void {
     for(var j=0;j<vals.length;j++){ spark(byId("cc"+j), coreHist[j]||[], 24); }
   }
   var rd=api.read;
+  // Connection state. A gateway restart or a dropped link must never leave the
+  // card silent: the header keeps the last successful time and says it is
+  // reconnecting until reads succeed again.
+  var fails=0, lastOkAt=null;
+  function hms(d){ var p=function(n){return String(n).padStart(2,"0");}; return p(d.getHours())+":"+p(d.getMinutes())+":"+p(d.getSeconds()); }
+  function connOk(){ fails=0; lastOkAt=new Date(); }
+  function connBad(){ fails++; }
   function render(){
-    set("upd","实时 · "+hhmm());
+    set("upd", fails>0 ? ("最后成功 "+(lastOkAt?hms(lastOkAt):"—")) : ("实时 · "+hhmm()));
     set("scpu",(st.load?st.load:"—")+" · "+st.cores+" vCPU"+(st.busy!=null?" · 网关 "+st.busy+"%":""));
     set("smem", st.mem!=null?("已用 "+st.mem+"% · swap "+(st.swap||"—")):"—");
     set("snet", st.rx!=null?("↓ "+rate(st.rx)+" · ↑ "+rate(st.tx)):"—");
@@ -154,6 +161,7 @@ export function renderSysStatus(root: HTMLElement, api: SysStatusApi): void {
     if(!rd){ set("gwbadge","未授权"); } else try{
       var H=await rd("health");
       var ok=H&&H.running!==false&&H.connected!==false;
+      if(ok){ connOk(); } else { connBad(); }
       set("gwbadge", ok?"正常":((H&&(H.lifecycle||H.status))||"未知"));
       var dd=byId("gwdot"); if(dd) dd.className="dot "+(ok?"ok":"danger");
       var el=(H&&H.eventLoop)||{};
@@ -162,7 +170,7 @@ export function renderSysStatus(root: HTMLElement, api: SysStatusApi): void {
       var q=el.p99Ms; if(typeof q!=="number") q=el.delayP99Ms;
       if(typeof q==="number"){ maxP99=Math.max(maxP99,q); push(hist.p99,Math.round(q),CAP); set("vp99",Math.round(q)+" ms"); set("sp99","最大 "+Math.round(maxP99)+" ms"); spark(byId("cp99"),hist.p99); }
       var ch=H&&H.channels; if(ch&&typeof ch==="object"){var ids=Object.keys(ch),on=ids.filter(function(k){var c=ch[k]||{};return c.running!==false&&c.connected!==false;}).length; set("vchan",on+"/"+ids.length);} else set("vchan","—");
-    }catch(e){ set("gwbadge","读取失败"); }
+    }catch(e){ connBad(); set("gwbadge", fails>=2?("网关断开 · 重连中"):"读取失败"); }
     render();
   }
   async function slowTick(){
@@ -187,7 +195,23 @@ export function renderSysStatus(root: HTMLElement, api: SysStatusApi): void {
     var tt=(below+th<=rb.height)?below:(above>=4?above:Math.max(4, Math.min(below, rb.height-th-4)));
     tip.style.left=tl+"px"; tip.style.top=tt+"px"; });
   root.addEventListener("mouseout",function(ev){ var t=ev.target.closest?ev.target.closest("[data-tip]"):null; if(t) tip.style.display="none"; });
-  relayout(); hostTick(); fastTick(); slowTick(); render();
-  setInterval(hostTick,3000); setInterval(fastTick,3000); setInterval(slowTick,3000); setTimeout(relayout,250);
+  function refreshAll(){ hostTick(); fastTick(); slowTick(); }
+  function onVisible(){ if(!document.hidden) refreshAll(); }
+  function onNetwork(){ refreshAll(); }
+  var timers=[setInterval(hostTick,3000), setInterval(fastTick,3000), setInterval(slowTick,3000)];
+  var relayoutTimer=setTimeout(relayout,250);
+  document.addEventListener("visibilitychange",onVisible);
+  window.addEventListener("online",onNetwork);
+  window.addEventListener("offline",onNetwork);
+  refreshAll(); render();
+  // Returned to the mount wrapper: stops timers/listeners without touching DOM,
+  // so a host unmount cannot leave an emptied widget behind.
+  return function stop(){
+    for(var i=0;i<timers.length;i++) clearInterval(timers[i]);
+    timers.length=0; clearTimeout(relayoutTimer);
+    document.removeEventListener("visibilitychange",onVisible);
+    window.removeEventListener("online",onNetwork);
+    window.removeEventListener("offline",onNetwork);
+  };
 
 }

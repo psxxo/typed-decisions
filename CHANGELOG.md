@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- sys-status board widget: survive a Gateway restart or a dropped link instead of
+  going blank. `dispose()` no longer clears the rendered markup, `mount()` reuses
+  an existing root, and a watchdog re-attaches/rebuilds the card and restarts the
+  polling loop. Reads go through the current activation's host rather than the
+  one captured at mount. The header now reports the last successful update and
+  `网关断开 · 重连中` while reads fail, and the loop refreshes immediately on
+  `visibilitychange` / `online`.
+
 ## 1.6.9
 
 Targets OpenClaw 2026.9.9.

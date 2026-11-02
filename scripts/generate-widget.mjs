@@ -61,7 +61,7 @@ const out = [
   "  read: (id: string, params?: Record<string, unknown>) => Promise<unknown>;",
   "  metrics: () => Promise<unknown>;",
   "};",
-  "export function renderSysStatus(root: HTMLElement, api: SysStatusApi): void {",
+  "export function renderSysStatus(root: HTMLElement, api: SysStatusApi): () => void {",
   helper,
   body,
   "}",
