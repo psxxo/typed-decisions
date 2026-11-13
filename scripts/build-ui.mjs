@@ -12,6 +12,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readdirSync } from "node:fs";
 import { mkdir, readFile, readlink, rm, symlink, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -121,6 +122,8 @@ function resolveSdkDir() {
   } catch {
     // not resolvable from the checkout; fall through to known locations
   }
+  if (process.env.OPENCLAW_SDK_DIR) candidates.push(process.env.OPENCLAW_SDK_DIR);
+  candidates.push(join(homedir(), ".npm-global", "lib", "node_modules", "openclaw", "dist", "plugin-sdk"));
   candidates.push(join(dirname(process.execPath), "..", "lib", "node_modules", "openclaw", "dist", "plugin-sdk"));
   candidates.push("/usr/local/lib/node_modules/openclaw/dist/plugin-sdk");
   const found = candidates.find((path) => existsSync(path));

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- sys-status board widget: the CPU per-core block is now a compact 4-column grid
+  (one cell per core: core label, percentage, 3px usage bar) instead of a
+  16-row vertical list with a sparkline per core. The card no longer grows with
+  the core count on a wide board.
+
 - sys-status board widget: survive a Gateway restart or a dropped link instead of
   going blank. `dispose()` no longer clears the rendered markup, `mount()` reuses
   an existing root, and a watchdog re-attaches/rebuilds the card and restarts the
