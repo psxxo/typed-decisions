@@ -1,4 +1,4 @@
-// ../../../../../usr/local/lib/node_modules/openclaw/dist/plugin-sdk/control-ui.js
+// ../../../../home/fcslx/.npm-global/lib/node_modules/openclaw/dist/plugin-sdk/control-ui.js
 function defineControlUiPlugin(plugin) {
   return plugin;
 }
@@ -576,26 +576,49 @@ function renderSysStatus(root, api) {
     fastTick();
     slowTick();
   }
-  function onVisible() {
+  function onNetwork() {
     if (!document.hidden) refreshAll();
   }
-  function onNetwork() {
+  var timers = [], beatTimer = 0, relayoutTimer = setTimeout(relayout, 250), onScreen = true;
+  function startPolling() {
+    if (timers.length) return;
     refreshAll();
+    render();
+    timers = [setInterval(hostTick, 3e3), setInterval(fastTick, 3e3), setInterval(slowTick, 3e3)];
+    beatTimer = setInterval(beat, 1e3);
+  }
+  function stopPolling() {
+    for (var i = 0; i < timers.length; i++) clearInterval(timers[i]);
+    timers.length = 0;
+    if (beatTimer) {
+      clearInterval(beatTimer);
+      beatTimer = 0;
+    }
+  }
+  function syncPolling() {
+    if (!document.hidden && onScreen) startPolling();
+    else stopPolling();
+  }
+  function onVisible() {
+    syncPolling();
   }
   window.addEventListener("message", onDirect);
   startDirect();
-  var timers = [setInterval(hostTick, 3e3), setInterval(fastTick, 3e3), setInterval(slowTick, 3e3)];
-  var beatTimer = setInterval(beat, 1e3);
-  var relayoutTimer = setTimeout(relayout, 250);
   document.addEventListener("visibilitychange", onVisible);
   window.addEventListener("online", onNetwork);
   window.addEventListener("offline", onNetwork);
-  refreshAll();
-  render();
+  try {
+    if (window.IntersectionObserver) {
+      new IntersectionObserver(function(entries) {
+        for (var i = 0; i < entries.length; i++) onScreen = entries[i].isIntersecting;
+        syncPolling();
+      }, { threshold: 0.01 }).observe(root);
+    }
+  } catch (e) {
+  }
+  syncPolling();
   return function stop() {
-    for (var i = 0; i < timers.length; i++) clearInterval(timers[i]);
-    timers.length = 0;
-    clearInterval(beatTimer);
+    stopPolling();
     clearTimeout(relayoutTimer);
     window.removeEventListener("message", onDirect);
     if (directFrame) {

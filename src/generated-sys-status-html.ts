@@ -1,6 +1,6 @@
 // @ts-nocheck — generated from assets/sys-status-widget.html: untyped ES5 authored for the sandboxed widget lane.
 // Generated from assets/sys-status-widget.html by scripts/generate-widget.mjs. Do not edit by hand.
-export const SYS_STATUS_MARKUP = "<div id=\"oa-sys\" class=\"oa-sys\">\n<style>\n#oa-sys{position:relative;display:flex;flex-direction:column;gap:12px;padding:14px;font-family:var(--font-body,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,\"PingFang SC\",\"Microsoft YaHei\",sans-serif);font-size:12px;line-height:1.45;color:var(--text)}\n#oa-sys .hd{display:flex;align-items:center;gap:8px;flex-wrap:wrap}\n#oa-sys .dot{width:9px;height:9px;border-radius:50%;background:var(--muted);flex:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--muted) 18%,transparent)}\n#oa-sys .dot.ok{background:var(--ok);box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 18%,transparent)}\n#oa-sys .dot.danger{background:var(--danger);box-shadow:0 0 0 3px color-mix(in srgb,var(--danger) 18%,transparent)}\n#oa-sys .ttl{font-weight:600;letter-spacing:.02em}\n#oa-sys .sp1{flex:1}\n#oa-sys .upd{color:var(--muted);font-size:11px;font-family:var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, \"Liberation Mono\", monospace)}\n#oa-sys .grid{display:grid;gap:10px;grid-template-columns:1fr}\n#oa-sys .t{position:relative;display:flex;flex-direction:column;gap:3px;padding:11px 12px 0;border:1px solid var(--border);border-radius:13px;background:var(--card);min-width:0;overflow:hidden;transition:border-color .15s,box-shadow .15s}\n#oa-sys .t:hover,#oa-sys .m:hover{border-color:var(--border-strong);box-shadow:0 4px 16px rgba(0,0,0,.18)}\n#oa-sys .l{color:var(--muted);font-size:10.5px;letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n#oa-sys .v{font-family:var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, \"Liberation Mono\", monospace);font-size:20px;font-weight:600;line-height:1.1;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n#oa-sys .s{color:var(--muted);font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n#oa-sys .chart{position:relative;height:38px;margin:7px -12px 0}\n#oa-sys .chart svg{display:block;width:100%;height:100%}\n#oa-sys .chart .dot-end,#oa-sys .cchart .dot-end{position:absolute;right:auto;left:calc(100% - 3px);width:5px;height:5px;border-radius:50%;background:#2f9e8f;box-shadow:0 0 6px color-mix(in srgb,#2f9e8f 55%,transparent);transform:translate(-50%,-50%);pointer-events:none}\n#oa-sys .chart .hairline,#oa-sys .cchart .hairline{position:absolute;top:0;bottom:0;width:1px;background:color-mix(in srgb,#2f9e8f 40%,transparent);pointer-events:none;display:none}\n#oa-sys .chart .hover-label,#oa-sys .cchart .hover-label{position:absolute;right:2px;top:0;padding:0 4px;font-size:10px;font-family:var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, \"Liberation Mono\", monospace);color:var(--text);background:var(--elevated,var(--card));border:1px solid var(--border);border-radius:5px;white-space:nowrap;pointer-events:none;display:none}\n#oa-sys .corebox{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:11px 0 0}\n#oa-sys .corebox .core{display:flex;flex-direction:column;gap:1px;padding:6px 8px;border:1px solid var(--border);border-radius:9px;min-width:0;background:var(--card)}\n#oa-sys .corebox .cl{color:var(--muted);font-size:9.5px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n#oa-sys .corebox b{font-family:var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, \"Liberation Mono\", monospace);font-size:13px;font-weight:600;line-height:1.15}\n#oa-sys .corebox .cbar{height:3px;border-radius:2px;background:var(--border);overflow:hidden;margin-top:2px}\n#oa-sys .corebox .cbar i{display:block;height:100%;width:0;border-radius:2px;background:#2f9e8f;transition:width .3s}\n#oa-sys .m{position:relative;display:flex;flex-direction:column;gap:2px;padding:9px 11px;border:1px solid var(--border);border-radius:11px;min-width:0;transition:border-color .15s,box-shadow .15s}\n#oa-sys .m .v{font-size:16px}\n#oa-sys .tip{position:absolute;z-index:9;display:none;max-width:min(250px,calc(100% - 8px));box-sizing:border-box;padding:9px 11px;border:1px solid var(--border-strong);border-radius:10px;background:var(--elevated,var(--card));box-shadow:0 8px 24px rgba(0,0,0,.28);font-size:11px;line-height:1.55}\n#oa-sys .tip b{display:block;margin-bottom:3px}\n#oa-sys .tip .r{display:flex;justify-content:space-between;gap:14px}\n#oa-sys .tip .r span:first-child{color:var(--muted)}\n#oa-sys .sec{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:10px;letter-spacing:.1em;text-transform:uppercase;margin-top:2px}\n#oa-sys .sec:after{content:\"\";flex:1;height:1px;background:var(--border)}\n</style>\n<div class=\"hd\"><span class=\"dot\" id=\"gwdot\"></span><span class=\"ttl\">系统状态</span><span class=\"badge\" id=\"gwbadge\">读取中…</span><span class=\"sp1\"></span><span class=\"upd\" id=\"upd\">—</span></div>\n<div class=\"grid\" id=\"gmain\">\n  <div class=\"t\" data-tip=\"cpu\"><span class=\"l\">CPU 宿主 · 实时</span><span class=\"v\" id=\"vcpu\">—</span><span class=\"s\" id=\"scpu\">—</span><div class=\"chart\" id=\"ccpu\"></div></div>\n  <div class=\"t\" data-tip=\"cores\"><span class=\"l\">CPU 各核 · 实时</span><div class=\"corebox\" id=\"corebox\"></div></div>\n  <div class=\"t\" data-tip=\"mem\"><span class=\"l\">内存 宿主 · 实时</span><span class=\"v\" id=\"vmem\">—</span><span class=\"s\" id=\"smem\">—</span><div class=\"chart\" id=\"cmem\"></div></div>\n  <div class=\"t\" data-tip=\"net\"><span class=\"l\">网络吞吐 · 实时</span><span class=\"v\" id=\"vnet\">—</span><span class=\"s\" id=\"snet\">—</span><div class=\"chart\" id=\"cnet\"></div></div>\n  <div class=\"t\" data-tip=\"disk\"><span class=\"l\">磁盘 / · 实时</span><span class=\"v\" id=\"vdisk\">—</span><span class=\"s\" id=\"sdisk\">—</span><div class=\"chart\" id=\"cdisk\"></div></div>\n  <div class=\"t\" data-tip=\"p99\"><span class=\"l\">延迟 P99 · 实时</span><span class=\"v\" id=\"vp99\">—</span><span class=\"s\" id=\"sp99\">—</span><div class=\"chart\" id=\"cp99\"></div></div>\n</div>\n<div class=\"sec\">实时活动</div>\n<div class=\"grid\" id=\"gact\">\n  <div class=\"m\" data-tip=\"sess\"><span class=\"l\">会话</span><span class=\"v\" id=\"vsess\">—</span></div>\n  <div class=\"m\" data-tip=\"cron\"><span class=\"l\">自动化</span><span class=\"v\" id=\"vcron\">—</span></div>\n  <div class=\"m\" data-tip=\"agent\"><span class=\"l\">智能体</span><span class=\"v\" id=\"vagent\">—</span></div>\n  <div class=\"m\" data-tip=\"chan\"><span class=\"l\">通道</span><span class=\"v\" id=\"vchan\">—</span></div>\n</div>\n<div class=\"tip\" id=\"tip\"></div>\n</div>";
+export const SYS_STATUS_MARKUP = "<div id=\"oa-sys\" class=\"oa-sys\">\n<style>\n#oa-sys{position:relative;display:flex;flex-direction:column;gap:12px;padding:14px;font-family:var(--font-body,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,\"PingFang SC\",\"Microsoft YaHei\",sans-serif);font-size:12px;line-height:1.45;color:var(--text)}\n#oa-sys .hd{display:flex;align-items:center;gap:8px;flex-wrap:wrap}\n#oa-sys .dot{width:9px;height:9px;border-radius:50%;background:var(--muted);flex:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--muted) 18%,transparent)}\n#oa-sys .dot.ok{background:var(--ok);box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 18%,transparent)}\n#oa-sys .dot.danger{background:var(--danger);box-shadow:0 0 0 3px color-mix(in srgb,var(--danger) 18%,transparent)}\n#oa-sys .ttl{font-weight:600;letter-spacing:.02em}\n#oa-sys .sp1{flex:1}\n#oa-sys .upd{color:var(--muted);font-size:11px;font-family:var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, \"Liberation Mono\", monospace)}\n#oa-sys .grid{display:grid;gap:10px;grid-template-columns:1fr}\n#oa-sys .t{position:relative;display:flex;flex-direction:column;gap:3px;padding:11px 12px 0;border:1px solid var(--border);border-radius:13px;background:var(--card);min-width:0;overflow:hidden;transition:border-color .15s,box-shadow .15s}\n#oa-sys .t:hover,#oa-sys .m:hover{border-color:var(--border-strong);box-shadow:0 4px 16px rgba(0,0,0,.18)}\n#oa-sys .l{color:var(--muted);font-size:10.5px;letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n#oa-sys .v{font-family:var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, \"Liberation Mono\", monospace);font-size:20px;font-weight:600;line-height:1.1;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n#oa-sys .s{color:var(--muted);font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n#oa-sys .chart{position:relative;height:38px;margin:7px -12px 0}\n#oa-sys .chart svg{display:block;width:100%;height:100%}\n#oa-sys .chart .dot-end,#oa-sys .cchart .dot-end{position:absolute;right:auto;left:calc(100% - 3px);width:5px;height:5px;border-radius:50%;background:#2f9e8f;box-shadow:0 0 6px color-mix(in srgb,#2f9e8f 55%,transparent);transform:translate(-50%,-50%);pointer-events:none}\n#oa-sys .chart .hairline,#oa-sys .cchart .hairline{position:absolute;top:0;bottom:0;width:1px;background:color-mix(in srgb,#2f9e8f 40%,transparent);pointer-events:none;display:none}\n#oa-sys .chart .hover-label,#oa-sys .cchart .hover-label{position:absolute;right:2px;top:0;padding:0 4px;font-size:10px;font-family:var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, \"Liberation Mono\", monospace);color:var(--text);background:var(--elevated,var(--card));border:1px solid var(--border);border-radius:5px;white-space:nowrap;pointer-events:none;display:none}\n#oa-sys .corebox{display:flex;flex-direction:column;gap:7px;margin:11px 0 0}\n#oa-sys .corebox .crow{display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:0 12px;font-size:10.5px}\n#oa-sys .corebox .crow .cl{color:var(--muted)}\n#oa-sys .corebox .crow b{font-family:var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, \"Liberation Mono\", monospace);font-weight:600}\n#oa-sys .corebox .core{display:block;width:100%}\n#oa-sys .corebox .cchart{position:relative;height:24px;margin:0 -12px;width:auto}\n#oa-sys .corebox .core:last-child .cchart{border-radius:0 0 12px 12px}\n#oa-sys .corebox .cchart svg{display:block;width:100%;height:100%}\n#oa-sys .m{position:relative;display:flex;flex-direction:column;gap:2px;padding:9px 11px;border:1px solid var(--border);border-radius:11px;min-width:0;transition:border-color .15s,box-shadow .15s}\n#oa-sys .m .v{font-size:16px}\n#oa-sys .tip{position:absolute;z-index:9;display:none;max-width:min(250px,calc(100% - 8px));box-sizing:border-box;padding:9px 11px;border:1px solid var(--border-strong);border-radius:10px;background:var(--elevated,var(--card));box-shadow:0 8px 24px rgba(0,0,0,.28);font-size:11px;line-height:1.55}\n#oa-sys .tip b{display:block;margin-bottom:3px}\n#oa-sys .tip .r{display:flex;justify-content:space-between;gap:14px}\n#oa-sys .tip .r span:first-child{color:var(--muted)}\n#oa-sys .sec{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:10px;letter-spacing:.1em;text-transform:uppercase;margin-top:2px}\n#oa-sys .sec:after{content:\"\";flex:1;height:1px;background:var(--border)}\n</style>\n<div class=\"hd\"><span class=\"dot\" id=\"gwdot\"></span><span class=\"ttl\">系统状态</span><span class=\"badge\" id=\"gwbadge\">读取中…</span><span class=\"sp1\"></span><span class=\"upd\" id=\"upd\">—</span></div>\n<div class=\"grid\" id=\"gmain\">\n  <div class=\"t\" data-tip=\"cpu\"><span class=\"l\">CPU 宿主 · 实时</span><span class=\"v\" id=\"vcpu\">—</span><span class=\"s\" id=\"scpu\">—</span><div class=\"chart\" id=\"ccpu\"></div></div>\n  <div class=\"t\" data-tip=\"cores\"><span class=\"l\">CPU 各核 · 实时</span><div class=\"corebox\" id=\"corebox\"></div></div>\n  <div class=\"t\" data-tip=\"mem\"><span class=\"l\">内存 宿主 · 实时</span><span class=\"v\" id=\"vmem\">—</span><span class=\"s\" id=\"smem\">—</span><div class=\"chart\" id=\"cmem\"></div></div>\n  <div class=\"t\" data-tip=\"net\"><span class=\"l\">网络吞吐 · 实时</span><span class=\"v\" id=\"vnet\">—</span><span class=\"s\" id=\"snet\">—</span><div class=\"chart\" id=\"cnet\"></div></div>\n  <div class=\"t\" data-tip=\"disk\"><span class=\"l\">磁盘 / · 实时</span><span class=\"v\" id=\"vdisk\">—</span><span class=\"s\" id=\"sdisk\">—</span><div class=\"chart\" id=\"cdisk\"></div></div>\n  <div class=\"t\" data-tip=\"p99\"><span class=\"l\">延迟 P99 · 实时</span><span class=\"v\" id=\"vp99\">—</span><span class=\"s\" id=\"sp99\">—</span><div class=\"chart\" id=\"cp99\"></div></div>\n</div>\n<div class=\"sec\">实时活动</div>\n<div class=\"grid\" id=\"gact\">\n  <div class=\"m\" data-tip=\"sess\"><span class=\"l\">会话</span><span class=\"v\" id=\"vsess\">—</span></div>\n  <div class=\"m\" data-tip=\"cron\"><span class=\"l\">自动化</span><span class=\"v\" id=\"vcron\">—</span></div>\n  <div class=\"m\" data-tip=\"agent\"><span class=\"l\">智能体</span><span class=\"v\" id=\"vagent\">—</span></div>\n  <div class=\"m\" data-tip=\"chan\"><span class=\"l\">通道</span><span class=\"v\" id=\"vchan\">—</span></div>\n</div>\n<div class=\"tip\" id=\"tip\"></div>\n</div>";
 export type SysStatusApi = {
   read: (id: string, params?: Record<string, unknown>) => Promise<unknown>;
   metrics: () => Promise<unknown>;
@@ -9,7 +9,7 @@ export function renderSysStatus(root: HTMLElement, api: SysStatusApi): () => voi
   const byId = (id: string) => root.querySelector('[id="' + id + '"]') as HTMLElement | null;
 
   
-  var TEAL="#2f9e8f", WHITE="#ffffff", MB=1048576, HOST="https://47.93.209.162:18575/metrics.json?v=r6", CAP=80;
+  var TEAL="#2f9e8f", WHITE="#ffffff", MB=1048576, HOST="https://47.93.209.162:18575/metrics.json", CAP=80;
   var MODE={ccpu:"pct",cmem:"pct",cdisk:"pct",cnet:"abs",cp99:"abs"};
   var ABS={cnet:{warn:5*MB, red:15*MB, unit:"MB/s"}, cp99:{warn:200, red:700, unit:"ms"}};
   function cssv(n,fb){ try{ var v=getComputedStyle(document.documentElement).getPropertyValue(n); v=(v||"").trim(); return v||fb; }catch(e){ return fb; } }
@@ -124,10 +124,9 @@ export function renderSysStatus(root: HTMLElement, api: SysStatusApi): () => voi
     while(coreHist.length<vals.length) coreHist.push([]);
     for(var i=0;i<vals.length;i++){ if(typeof vals[i]==="number") push(coreHist[i],vals[i],CAP); }
     el.innerHTML=vals.map(function(v,i){
-      var pct=(typeof v==="number")?v:0;
-      var w=Math.max(0,Math.min(100,pct));
-      return "<div class=\"core\"><span class=\"cl\">核 "+i+"</span><b>"+(typeof v==="number"?v+"%":"—")+"</b><div class=\"cbar\"><i style=\"width:"+w+"%\"></i></div></div>";
+      return "<div class=\"core\"><div class=\"crow\"><span class=\"cl\">核 "+i+"</span><b>"+(typeof v==="number"?v+"%":"—")+"</b></div><div class=\"cchart\" id=\"cc"+i+"\"></div></div>";
     }).join("");
+    for(var j=0;j<vals.length;j++){ spark(byId("cc"+j), coreHist[j]||[], 24); }
   }
   var rd=api.read;
   // Connection state. A gateway restart or a dropped link must never leave the
@@ -138,24 +137,20 @@ export function renderSysStatus(root: HTMLElement, api: SysStatusApi): () => voi
   // process and survives a Gateway restart; the board embeds it in a hidden
   // iframe so the hardware tiles keep updating while the Gateway is down. The
   // Gateway RPC remains the fallback for the first paint.
-  // Fixed origin, same one HOST uses. Deriving it from location breaks inside
-  // the widget sandbox: the derived host is not this machine, so the embedded
-  // frame never loads and every cache call silently fails.
-  var DIRECT_BASE="https://47.93.209.162:18575";
+  var DIRECT_BASE=(function(){ try{ return (location.protocol||"https:")+"//"+(location.hostname||"47.93.209.162")+":18575"; }catch(e){ return "https://47.93.209.162:18575"; } })();
   var hostAt=0, gwOk=null, directFrame=null, directSeen=false, directTriedAt=0;
-  function hostFresh(){ var t=(gapNow||3000)+6000; return hostAt>0 && (Date.now()-hostAt)<t; }
+  function hostFresh(){ return hostAt>0 && (Date.now()-hostAt)<7000; }
   function badge(){
     var dd=byId("gwdot");
     if(dd) dd.className="dot "+(((gwOk===true)||hostFresh())?"ok":"danger");
     if(gwOk===true){ set("gwbadge","正常"); return; }
-    if(gwOk===null){ set("gwbadge", hostFresh() ? "正常" : "读取中…"); return; }
     if(gwOk===false && hostFresh()){ set("gwbadge","网关重启中 · 主机数据正常"); return; }
     if(gwOk===false){ set("gwbadge","网关断开 · 重连中"); return; }
     set("gwbadge","读取中…");
   }
   function beat(){
-    set("upd", lastFail ? ("读取失败 · 最后成功 "+(lastOkAt?hms(lastOkAt):"—")) : ("实时 · "+hhmm()));
-    badge();
+    var fresh=hostFresh();
+    set("upd", fresh ? ("实时 · "+hhmm()) : outageText());
     // A frame that failed before the certificate was accepted stays failed.
     // Rebuild it every 20s until it delivers.
     if(!directSeen && directTriedAt && Date.now()-directTriedAt>20000){
@@ -172,77 +167,16 @@ export function renderSysStatus(root: HTMLElement, api: SysStatusApi): () => voi
     return "最后成功 "+hms(lastOkAt)+" · 已失联 "+m+"分"+(s<10?"0":"")+s+"秒";
   }
   function render(){
-    set("upd", lastFail ? ("读取失败 · 最后成功 "+(lastOkAt?hms(lastOkAt):"—")) : ("实时 · "+hhmm()));
+    set("upd", hostFresh() ? ("实时 · "+hhmm()) : outageText());
     set("scpu",(st.load?st.load:"—")+" · "+st.cores+" vCPU"+(st.busy!=null?" · 网关 "+st.busy+"%":""));
     set("smem", st.mem!=null?("已用 "+st.mem+"% · swap "+(st.swap||"—")):"—");
     set("snet", st.rx!=null?("↓ "+rate(st.rx)+" · ↑ "+rate(st.tx)):"—");
     set("sdisk", st.disk!=null?("已用 "+st.disk+"% · 可用 "+gb(st.diskAvail)):"—");
     if(st.hostOk===false && gwOk!==false){ set("sdisk","指标端点未连通 · 检查 18575"); }
   }
-  var lastFail=false;
-  // Shared business-metric cache on the metrics origin. Every board instance
-  // reads the same payload; only a stale slot triggers a real Gateway call and
-  // the result is written back once, so N boards no longer mean N Gateway calls.
-  var BIZ=DIRECT_BASE+"/biz.json", bizSeq=0, bizWait={};
-  // The widget frame cannot fetch the metrics origin itself (the host CSP only
-  // permits framing), so cache reads/writes are relayed through the embedded
-  // metrics page, which lives on that origin and answers over postMessage.
-  function bizPost(make){
-    return new Promise(function(resolve){
-      if(!directFrame){ resolve(null); return; }
-      var id=++bizSeq, done=false;
-      bizWait[id]=function(v){ if(done) return; done=true; resolve(v); };
-      try{ directFrame.contentWindow.postMessage(make(id), DIRECT_BASE); }
-      catch(e){ delete bizWait[id]; resolve(null); return; }
-      setTimeout(function(){ if(done) return; done=true; delete bizWait[id]; resolve(null); }, 1200);
-    });
-  }
-  // Direct fetch first: this frame is allowed to reach the metrics origin (the
-  // hardware poll already proves it). The embedded-frame relay stays as a
-  // fallback for hosts whose CSP blocks the direct call.
-  async function bizRead(){
-    try{
-      var ctl=(typeof AbortController!=="undefined")?new AbortController():null;
-      var to=ctl?setTimeout(function(){ try{ctl.abort();}catch(e){} },2500):0;
-      var r=await fetch(BIZ,{cache:"no-store",signal:ctl?ctl.signal:undefined});
-      if(to) clearTimeout(to);
-      if(r.ok) return await r.json();
-    }catch(e){}
-    return await bizPost(function(id){ return {type:"biz.get", id:id}; });
-  }
-  function bizWrite(key,at,v){
-    var p={}; p[key]={at:at,v:v};
-    try{ fetch(BIZ,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({data:p})}).catch(function(){}); }catch(e){}
-  }
-  // One snapshot per polling round: all four slots read the same GET instead of
-  // each issuing its own request (4x per round was the whole excess).
-  var bizSnap=null, bizSnapAt=0;
-  async function bizSnapshot(){
-    var now=Date.now();
-    if(bizSnap && now-bizSnapAt<3500) return bizSnap;
-    var b=await bizRead();
-    if(b){ bizSnap=b; bizSnapAt=Date.now(); }
-    return b;
-  }
-  async function bizSlot(key,ttl,fetchFn){
-    var b=await bizSnapshot(), s=b&&b.data?b.data[key]:null;
-    if(s&&typeof s.at==="number"&&Date.now()-s.at<ttl) return s.v;
-    // Small jitter + recheck collapses the case where several frames go stale
-    // in the same second; the second reader usually finds the first one's write.
-    await new Promise(function(r){ setTimeout(r,120+Math.random()*180); });
-    var b2=await bizSnapshot(), s2=b2&&b2.data?b2.data[key]:null;
-    if(s2&&typeof s2.at==="number"&&Date.now()-s2.at<ttl) return s2.v;
-    var v=await fetchFn();
-    var stamp=Date.now();
-    bizWrite(key,stamp,v);
-    // Fold the fresh value into the in-memory snapshot instead of discarding it:
-    // the remaining slots in this round then reuse it and skip their own GET.
-    if(bizSnap && bizSnap.data){ bizSnap.data[key]={at:stamp,v:v}; bizSnapAt=stamp; }
-    return v;
-  }
   async function hostTick(){
-    try{ applyMetrics(await gatewayMetrics()); lastFail=false; }
-    catch(e){ lastFail=true; st.hostOk=false; }
+    if(hostFresh()) return;
+    try{ applyMetrics(await gatewayMetrics()); }catch(e){ st.hostOk=false; }
   }
   async function gatewayMetrics(){
     var d=await api.metrics();
@@ -278,18 +212,13 @@ export function renderSysStatus(root: HTMLElement, api: SysStatusApi): () => voi
     if(!directFrame || ev.source!==directFrame.contentWindow) return;
     if(ev.origin!==DIRECT_BASE) return;
     var m=ev.data;
-    if(!m || typeof m!=="object") return;
-    if(m.type==="biz.result"){ var cb=bizWait[m.id]; if(cb){ delete bizWait[m.id]; cb(m.data||null); } return; }
-    if(m.type==="biz.ack"){ var ac=bizWait[m.id]; if(ac){ delete bizWait[m.id]; ac(true); } return; }
-    if(m.type!=="sysmetrics.metrics" || !m.data) return;
+    if(!m || m.type!=="sysmetrics.metrics" || !m.data) return;
     directSeen=true;
     applyMetrics(m.data); render();
   }
-  var fastBusy=false;
   async function fastTick(){
-    if(fastBusy) return;
     if(!rd){ gwOk=false; } else try{
-      var H=await bizSlot("health",2500,function(){ return rd("health"); });
+      var H=await rd("health");
       var ok=H&&H.running!==false&&H.connected!==false;
       gwOk=!!ok;
       var dd=byId("gwdot"); if(dd) dd.className="dot "+((ok||hostFresh())?"ok":"danger");
@@ -302,13 +231,11 @@ export function renderSysStatus(root: HTMLElement, api: SysStatusApi): () => voi
     }catch(e){ gwOk=false; }
     render();
   }
-  var slowBusy=false;
   async function slowTick(){
-    if(!rd || slowBusy) return;
-    slowBusy=true;
-    try{ var s=await bizSlot("sess",2500,function(){ return rd("sessions.list",{limit:1}); }); var a=arr(s,["sessions","items","rows"]); var n=(s&&typeof s.totalCount==="number")?s.totalCount:(a?a.length:"—"); set("vsess",n); }catch(e){}
-    try{ var c=await bizSlot("cron",2500,function(){ return rd("cron.list"); }); var j=arr(c,["jobs","items","rows"]); set("vcron",j?j.length:"—"); }catch(e){}
-    try{ var g=await bizSlot("agent",2500,function(){ return rd("agents.list"); }); var ag=arr(g,["agents","items"]); set("vagent",ag?ag.length:"—"); }catch(e){}
+    if(!rd) return;
+    try{ var s=await rd("sessions.list"); var a=arr(s,["sessions","items","rows"]); set("vsess",a?a.length:"—"); }catch(e){}
+    try{ var c=await rd("cron.list"); var j=arr(c,["jobs","items","rows"]); set("vcron",j?j.length:"—"); }catch(e){}
+    try{ var g=await rd("agents.list"); var ag=arr(g,["agents","items"]); set("vagent",ag?ag.length:"—"); }catch(e){}
   }
   function fit(grid,min){ if(!grid) return; var w=grid.clientWidth; if(!w) return; var n=grid.children.length; if(!n) return; var gap=10,best=1;
     for(var d=1; d<=n; d++){ if(n%d) continue; if((w-gap*(d-1))/d>=min) best=d; }
@@ -331,32 +258,33 @@ export function renderSysStatus(root: HTMLElement, api: SysStatusApi): () => voi
   // Only the page the operator is actually looking at polls. Hidden tabs and
   // widgets scrolled out of view stop their timers, so a dozen open sessions
   // no longer multiply the gateway load.
-  var timers=[], beatTimer=0, relayoutTimer=setTimeout(relayout,250), onScreen=true, gapNow=0;
+  var timers=[], beatTimer=0, relayoutTimer=setTimeout(relayout,250), onScreen=true;
   function startPolling(){
-    var gap = onScreen ? 3000 : 15000;
-    if(timers.length && gapNow === gap) return;
-    stopPolling();
+    if(timers.length) return;
     refreshAll(); render();
-    timers=[setInterval(hostTick,gap), setInterval(fastTick,gap), setInterval(slowTick,gap)];
-    gapNow=gap;
+    timers=[setInterval(hostTick,3000), setInterval(fastTick,3000), setInterval(slowTick,3000)];
     beatTimer=setInterval(beat,1000);
   }
   function stopPolling(){
     for(var i=0;i<timers.length;i++) clearInterval(timers[i]);
     timers.length=0;
-    gapNow=0;
     if(beatTimer){ clearInterval(beatTimer); beatTimer=0; }
   }
-  function syncPolling(){
-    if(document.hidden){ stopPolling(); return; }
-    startPolling();
-  }
+  function syncPolling(){ if(!document.hidden && onScreen) startPolling(); else stopPolling(); }
   function onVisible(){ syncPolling(); }
   window.addEventListener("message",onDirect);
   startDirect();
   document.addEventListener("visibilitychange",onVisible);
   window.addEventListener("online",onNetwork);
   window.addEventListener("offline",onNetwork);
+  try{
+    if(window.IntersectionObserver){
+      new IntersectionObserver(function(entries){
+        for(var i=0;i<entries.length;i++) onScreen=entries[i].isIntersecting;
+        syncPolling();
+      },{threshold:0.01}).observe(root);
+    }
+  }catch(e){}
   syncPolling();
   // Returned to the mount wrapper: stops timers/listeners without touching DOM,
   // so a host unmount cannot leave an emptied widget behind.
