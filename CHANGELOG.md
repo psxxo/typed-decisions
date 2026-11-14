@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.6.12 (2026-11-15)
+
+Fix the plugin manifest version drifting behind the package version.
+
+- `openclaw.plugin.json` was still 1.6.10 while `package.json` was 1.6.11, so
+  installers read the wrong version. Both fields are now in lockstep.
+
 ## 1.6.11 (2026-11-15)
 
 Board widget: pin the sys-status card as a full-bleed dashboard panel.
