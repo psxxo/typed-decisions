@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.6.11 (2026-11-15)
+
+Board widget: pin the sys-status card as a full-bleed dashboard panel.
+
+- `presentation: "full-bleed"` is now part of the documented pin payload; it must
+  be a top-level field (inside `placement` the Gateway rejects it with
+  `INVALID_REQUEST`).
+- Documented that `placement.size` has to stay `full` (12x8). Shrinking the card
+  afterwards keeps the manifest declaration but renders it as a sidebar
+  attachment again.
+- Documented the remove-then-put requirement when swapping content kinds, and the
+  verification query (12x8 / granted / granted_sha === sha256 / full-bleed).
+
 ## Unreleased
 
 - sys-status board widget: survive a Gateway restart or a dropped link instead of

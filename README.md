@@ -107,6 +107,72 @@ window.__openclawTypedDecisions.nudge(-10, 4)  // shift by dx,dy; returns the ne
 Defaults are `{x: 46, y: 34}`; `nudge()` adjusts the live placement so the values
 can be dialed in from the console and then baked into `DEFAULT_OFFSET`.
 
+## Pinning the sys-status board widget
+
+A correctly pinned card is a **full-bleed dashboard panel**, not a sidebar widget.
+Three things must hold at once:
+
+| Requirement | Value |
+| --- | --- |
+| `presentation` in the manifest | `full-bleed` |
+| Widget size | `12x8` (`full`) |
+| Content | `kind: "html"` with `grantState: granted` and `granted_sha === sha256` |
+
+Missing any one of them degrades the card into a sidebar attachment: hovering it
+shows an "authorized" chip, its settings live in that popover, and it never
+appears in the Layout menu.
+
+### Correct call
+
+```json
+{
+  "sessionKey": "agent:<id>:main",
+  "name": "sys-status",
+  "title": "System monitor",
+  "content": { "kind": "html", "html": "<contents of assets/sys-status-widget.html>" },
+  "declared": {
+    "netOrigins": ["https://<host>:18575"],
+    "tools": ["health", "sessions.list", "cron.list", "agents.list"]
+  },
+  "presentation": "full-bleed",
+  "placement": { "size": "full" }
+}
+```
+
+Two details that cost real time to discover:
+
+- `presentation` must be a **top-level** field. Putting it inside `placement`
+  fails with `INVALID_REQUEST`.
+- `placement.size` must stay `full` (12x8). Resizing the widget down afterwards
+  keeps the manifest declaration but renders it as a sidebar attachment again.
+
+### Replacing an existing card
+
+A board refuses to swap content kinds in place:
+
+```
+board widget sys-status contains html content; update it with the same content kind
+or remove it before replacing it with ... content
+```
+
+So to change type, remove first, then put:
+
+1. `board.update` with `{ kind: "widget_remove", name: "sys-status" }`
+2. `board.widget.put` with the payload above
+
+Same-kind updates (html over html) can go straight through `board.widget.put`.
+
+### Verifying
+
+```bash
+sqlite3 ~/.openclaw/agents/<agent>/agent/openclaw-agent.sqlite \
+  "select size_w, size_h, grant_state, granted_sha = sha256, manifest like '%full-bleed%' \
+   from board_widgets where name='sys-status'"
+```
+
+Expect `12|8|granted|1|1`. A manifest without `full-bleed` means the card will
+render as a sidebar attachment no matter how it looks at a glance.
+
 ## Building the browser bundle
 
 The backend has no build step and no runtime dependencies. The Control UI
