@@ -48,6 +48,15 @@ function guidance() {
   ].join("");
 }
 
+/**
+ * Automation surfaces (subagent runs, cron runs) must never pin a board.
+ * Their boards are scratch space: the pin leaves an empty panel behind and
+ * nothing ever cleans it up. Only interactive surfaces nudge.
+ */
+function isAutomationSession(key) {
+  return key.includes(":subagent:") || key.includes(":cron:");
+}
+
 /** True only when the finalized turn surface really carries the pin tool. */
 function canPinWidget(authority) {
   if (!authority || typeof authority.allows !== "function") return false;
@@ -78,6 +87,8 @@ export function registerSysStatusNudge(api, options = {}) {
       const fromEvent = typeof event?.sessionKey === "string" ? event.sessionKey : "";
       const key = fromCtx || fromEvent;
       if (!key || nudged.has(key)) return;
+      // Subagent and cron runs never get a board: skip before any bookkeeping.
+      if (isAutomationSession(key)) return;
       // Fail closed: only nudge a turn that can actually pin the widget.
       if (!canPinWidget(ctx?.toolAuthority)) return;
       nudged.add(key);

@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.6.16 (2026-11-16)
+
+Stop the board nudge on automation surfaces.
+
+- The nudge fired on every session, so subagent runs received a pin for the
+  sys-status widget they can never render. Each run left an empty panel on the
+  board, and archiving the session hid it without removing it.
+- The hook now returns early for session keys containing :subagent: or :cron:,
+  before any bookkeeping. Interactive surfaces behave exactly as before.
+- Seven empty panels left behind by earlier runs were removed from board_tabs /
+  board_widgets; session files and transcripts were untouched.
+
 ## 1.6.15 (2026-11-15)
 
 Add a one-page install checklist for a fresh machine.
