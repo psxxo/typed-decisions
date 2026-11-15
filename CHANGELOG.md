@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.6.14 (2026-11-15)
+
+Ship the pieces that were committed but never packed.
+
+- hooks/board-archive-unpin was in the repository since 1.6.11 but missing from
+  the package files list, so installers never got it. hooks, sysmetrics and
+  scripts are now declared in files.
+- The board reads host metrics from a loopback endpoint that lives outside the
+  gateway, so a fresh machine had no numbers. sysmetrics/sysmetrics.mjs now ships
+  with scripts/install-sysmetrics.sh, which creates a self-signed certificate,
+  writes and enables the user unit, then checks for HTTP 200.
+- The service honours SYSMETRICS_CERT_DIR and SYSMETRICS_CACHE_DIR so it no longer
+  assumes /data/work paths.
+- README documents the endpoint, the install step and the symptom when it is
+  missing (board shows 网关断开 · 重连中 with values but no metrics).
+
 ## 1.6.13 (2026-11-15)
 
 Ship the correct board and stop shipping stale copies of it.

@@ -198,3 +198,21 @@ plugin UI** in the Control UI.
 - No runtime dependencies. Only documented host SDK subpaths are imported
   (`openclaw/plugin-sdk/plugin-entry` eagerly, optional host helpers lazily);
   the browser bundle keeps its `openclaw/plugin-sdk/control-ui` import external.
+
+## 宿主指标端点（sysmetrics）
+
+看板的实时指标不来自浏览器，而是由插件后端读取宿主上的回环端点
+`https://127.0.0.1:18575/metrics.json`。该端点是独立用户单元，不在网关进程内，
+所以新机器装完插件后还要装它一次：
+
+```bash
+bash scripts/install-sysmetrics.sh
+```
+
+脚本会：生成自签证书（`~/.config/sysmetrics`）、写入 `sysmetrics.service`、
+`enable --now`，最后用 curl 校验端点返回 200。
+
+未安装时的表现：看板不报错，头部显示「网关断开 · 重连中」，参数区有值、指标区空。
+排查：`journalctl --user -u sysmetrics -n 50`。
+
+服务支持两个环境变量覆盖路径：`SYSMETRICS_CERT_DIR`、`SYSMETRICS_CACHE_DIR`。
