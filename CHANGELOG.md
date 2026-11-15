@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.6.13 (2026-11-15)
+
+Ship the correct board and stop shipping stale copies of it.
+
+- The generator assumed a single script block. The board asset is a full page
+  carrying two copies of the bridge shell (13 blocks), so the generated module no
+  longer compiled and the browser bundle stayed on the 13 Nov build. The
+  generator now reads the last document, takes the one script that renders
+  #oa-sys, and keeps only body markup.
+- Page-level CSS (:root, *, html,body, scrollbars, h1) is excluded from the widget
+  markup so it cannot restyle the Control UI shell.
+- Exactly one browser bundle is kept (dist/control-ui/3df814af06d1); the three
+  stale bundles, the old 31 KB asset copy and the stale build-capture copies are
+  gone.
+
 ## 1.6.12 (2026-11-15)
 
 Fix the plugin manifest version drifting behind the package version.

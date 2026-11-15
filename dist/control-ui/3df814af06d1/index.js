@@ -1,13 +1,13 @@
-// ../../../../../usr/local/lib/node_modules/openclaw/dist/plugin-sdk/control-ui.js
+// ../../../../home/fcslx/.npm-global/lib/node_modules/openclaw/dist/plugin-sdk/control-ui.js
 function defineControlUiPlugin(plugin) {
   return plugin;
 }
 
 // src/generated-sys-status-html.ts
-var SYS_STATUS_MARKUP = '<div id="oa-sys" class="oa-sys">\n<style>\n#oa-sys{position:relative;display:flex;flex-direction:column;gap:12px;padding:14px;font-family:var(--font-body,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif);font-size:12px;line-height:1.45;color:var(--text)}\n#oa-sys .hd{display:flex;align-items:center;gap:8px;flex-wrap:wrap}\n#oa-sys .dot{width:9px;height:9px;border-radius:50%;background:var(--muted);flex:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--muted) 18%,transparent)}\n#oa-sys .dot.ok{background:var(--ok);box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 18%,transparent)}\n#oa-sys .dot.danger{background:var(--danger);box-shadow:0 0 0 3px color-mix(in srgb,var(--danger) 18%,transparent)}\n#oa-sys .ttl{font-weight:600;letter-spacing:.02em}\n#oa-sys .sp1{flex:1}\n#oa-sys .upd{color:var(--muted);font-size:11px;font-family:var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace)}\n#oa-sys .grid{display:grid;gap:10px;grid-template-columns:1fr}\n#oa-sys .t{position:relative;display:flex;flex-direction:column;gap:3px;padding:11px 12px 0;border:1px solid var(--border);border-radius:13px;background:var(--card);min-width:0;overflow:hidden;transition:border-color .15s,box-shadow .15s}\n#oa-sys .t:hover,#oa-sys .m:hover{border-color:var(--border-strong);box-shadow:0 4px 16px rgba(0,0,0,.18)}\n#oa-sys .l{color:var(--muted);font-size:10.5px;letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n#oa-sys .v{font-family:var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace);font-size:20px;font-weight:600;line-height:1.1;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n#oa-sys .s{color:var(--muted);font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n#oa-sys .chart{position:relative;height:38px;margin:7px -12px 0}\n#oa-sys .chart svg{display:block;width:100%;height:100%}\n#oa-sys .chart .dot-end,#oa-sys .cchart .dot-end{position:absolute;right:auto;left:calc(100% - 3px);width:5px;height:5px;border-radius:50%;background:#2f9e8f;box-shadow:0 0 6px color-mix(in srgb,#2f9e8f 55%,transparent);transform:translate(-50%,-50%);pointer-events:none}\n#oa-sys .chart .hairline,#oa-sys .cchart .hairline{position:absolute;top:0;bottom:0;width:1px;background:color-mix(in srgb,#2f9e8f 40%,transparent);pointer-events:none;display:none}\n#oa-sys .chart .hover-label,#oa-sys .cchart .hover-label{position:absolute;right:2px;top:0;padding:0 4px;font-size:10px;font-family:var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace);color:var(--text);background:var(--elevated,var(--card));border:1px solid var(--border);border-radius:5px;white-space:nowrap;pointer-events:none;display:none}\n#oa-sys .corebox{display:flex;flex-direction:column;gap:7px;margin:11px 0 0}\n#oa-sys .corebox .crow{display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:0 12px;font-size:10.5px}\n#oa-sys .corebox .crow .cl{color:var(--muted)}\n#oa-sys .corebox .crow b{font-family:var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace);font-weight:600}\n#oa-sys .corebox .core{display:block;width:100%}\n#oa-sys .corebox .cchart{position:relative;height:24px;margin:0 -12px;width:auto}\n#oa-sys .corebox .core:last-child .cchart{border-radius:0 0 12px 12px}\n#oa-sys .corebox .cchart svg{display:block;width:100%;height:100%}\n#oa-sys .m{position:relative;display:flex;flex-direction:column;gap:2px;padding:9px 11px;border:1px solid var(--border);border-radius:11px;min-width:0;transition:border-color .15s,box-shadow .15s}\n#oa-sys .m .v{font-size:16px}\n#oa-sys .tip{position:absolute;z-index:9;display:none;max-width:min(250px,calc(100% - 8px));box-sizing:border-box;padding:9px 11px;border:1px solid var(--border-strong);border-radius:10px;background:var(--elevated,var(--card));box-shadow:0 8px 24px rgba(0,0,0,.28);font-size:11px;line-height:1.55}\n#oa-sys .tip b{display:block;margin-bottom:3px}\n#oa-sys .tip .r{display:flex;justify-content:space-between;gap:14px}\n#oa-sys .tip .r span:first-child{color:var(--muted)}\n#oa-sys .sec{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:10px;letter-spacing:.1em;text-transform:uppercase;margin-top:2px}\n#oa-sys .sec:after{content:"";flex:1;height:1px;background:var(--border)}\n</style>\n<div class="hd"><span class="dot" id="gwdot"></span><span class="ttl">\u7CFB\u7EDF\u72B6\u6001</span><span class="badge" id="gwbadge">\u8BFB\u53D6\u4E2D\u2026</span><span class="sp1"></span><span class="upd" id="upd">\u2014</span></div>\n<div class="grid" id="gmain">\n  <div class="t" data-tip="cpu"><span class="l">CPU \u5BBF\u4E3B \xB7 \u5B9E\u65F6</span><span class="v" id="vcpu">\u2014</span><span class="s" id="scpu">\u2014</span><div class="chart" id="ccpu"></div></div>\n  <div class="t" data-tip="cores"><span class="l">CPU \u5404\u6838 \xB7 \u5B9E\u65F6</span><div class="corebox" id="corebox"></div></div>\n  <div class="t" data-tip="mem"><span class="l">\u5185\u5B58 \u5BBF\u4E3B \xB7 \u5B9E\u65F6</span><span class="v" id="vmem">\u2014</span><span class="s" id="smem">\u2014</span><div class="chart" id="cmem"></div></div>\n  <div class="t" data-tip="net"><span class="l">\u7F51\u7EDC\u541E\u5410 \xB7 \u5B9E\u65F6</span><span class="v" id="vnet">\u2014</span><span class="s" id="snet">\u2014</span><div class="chart" id="cnet"></div></div>\n  <div class="t" data-tip="disk"><span class="l">\u78C1\u76D8 / \xB7 \u5B9E\u65F6</span><span class="v" id="vdisk">\u2014</span><span class="s" id="sdisk">\u2014</span><div class="chart" id="cdisk"></div></div>\n  <div class="t" data-tip="p99"><span class="l">\u5EF6\u8FDF P99 \xB7 \u5B9E\u65F6</span><span class="v" id="vp99">\u2014</span><span class="s" id="sp99">\u2014</span><div class="chart" id="cp99"></div></div>\n</div>\n<div class="sec">\u5B9E\u65F6\u6D3B\u52A8</div>\n<div class="grid" id="gact">\n  <div class="m" data-tip="sess"><span class="l">\u4F1A\u8BDD</span><span class="v" id="vsess">\u2014</span></div>\n  <div class="m" data-tip="cron"><span class="l">\u81EA\u52A8\u5316</span><span class="v" id="vcron">\u2014</span></div>\n  <div class="m" data-tip="agent"><span class="l">\u667A\u80FD\u4F53</span><span class="v" id="vagent">\u2014</span></div>\n  <div class="m" data-tip="chan"><span class="l">\u901A\u9053</span><span class="v" id="vchan">\u2014</span></div>\n</div>\n<div class="tip" id="tip"></div>\n</div>';
+var SYS_STATUS_MARKUP = '<div id="oa-sys" class="oa-sys">\n<style>\n#oa-sys{position:relative;display:flex;flex-direction:column;align-items:stretch;width:100%;box-sizing:border-box;gap:10px;padding:10px 8px;font-family:var(--font-body,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif);font-size:12px;line-height:1.45;color:var(--text)}\n#oa-sys .hd{display:flex;align-items:center;gap:8px;flex-wrap:wrap}\n#oa-sys .dot{width:9px;height:9px;border-radius:50%;background:var(--muted);flex:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--muted) 18%,transparent)}\n#oa-sys .dot.ok{background:var(--ok);box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 18%,transparent)}\n#oa-sys .dot.danger{background:var(--danger);box-shadow:0 0 0 3px color-mix(in srgb,var(--danger) 18%,transparent)}\n#oa-sys .ttl{font-weight:600;letter-spacing:.02em}\n#oa-sys .sp1{flex:1}\n#oa-sys .upd{color:var(--muted);font-size:11px;font-family:var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace)}\n#oa-sys .grid{display:grid;gap:10px;grid-template-columns:1fr}\n#oa-sys .t{position:relative;display:flex;flex-direction:column;gap:3px;padding:9px 8px 0;border:1px solid var(--border);border-radius:13px;background:var(--card);min-width:0;overflow:hidden;transition:border-color .15s,box-shadow .15s}\n#oa-sys .t:hover,#oa-sys .m:hover{border-color:var(--border-strong);box-shadow:0 4px 16px rgba(0,0,0,.18)}\n#oa-sys .l{color:var(--muted);font-size:10.5px;letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n#oa-sys .v{font-family:var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace);font-size:20px;font-weight:600;line-height:1.1;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n#oa-sys .s{color:var(--muted);font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n#oa-sys .chart{position:relative;height:38px;margin:7px -12px 0}\n#oa-sys .chart svg{display:block;width:100%;height:100%}\n#oa-sys .chart .dot-end,#oa-sys .cchart .dot-end{position:absolute;right:auto;left:calc(100% - 3px);width:5px;height:5px;border-radius:50%;background:#2f9e8f;box-shadow:0 0 6px color-mix(in srgb,#2f9e8f 55%,transparent);transform:translate(-50%,-50%);pointer-events:none}\n#oa-sys .chart .hairline,#oa-sys .cchart .hairline{position:absolute;top:0;bottom:0;width:1px;background:color-mix(in srgb,#2f9e8f 40%,transparent);pointer-events:none;display:none}\n#oa-sys .chart .hover-label,#oa-sys .cchart .hover-label{position:absolute;right:2px;top:0;padding:0 4px;font-size:10px;font-family:var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace);color:var(--text);background:var(--elevated,var(--card));border:1px solid var(--border);border-radius:5px;white-space:nowrap;pointer-events:none;display:none}\n#oa-sys .corebox{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;margin:11px -6px 0}\n#oa-sys .corebox .crow{display:flex;justify-content:space-between;align-items:baseline;gap:4px;padding:0;font-size:9.5px;line-height:1.25;white-space:nowrap}\n#oa-sys .corebox .crow .cl{color:var(--muted)}\n#oa-sys .corebox .crow b{font-family:var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace);font-weight:600}\n#oa-sys .corebox .core{display:flex;flex-direction:column;gap:2px;min-width:0;padding:4px 5px 3px;border:1px solid var(--border);border-radius:6px;overflow:hidden}\n#oa-sys .corebox .cchart{position:relative;height:12px;margin:0;width:100%}\n#oa-sys .corebox .core:last-child .cchart{border-radius:0}\n#oa-sys .corebox .cchart svg{display:block;width:100%;height:100%}\n#oa-sys .m{position:relative;display:flex;flex-direction:column;gap:2px;padding:9px 11px;border:1px solid var(--border);border-radius:11px;min-width:0;transition:border-color .15s,box-shadow .15s}\n#oa-sys .m .v{font-size:16px}\n#oa-sys .tip{position:absolute;z-index:9;display:none;max-width:min(250px,calc(100% - 8px));box-sizing:border-box;padding:9px 11px;border:1px solid var(--border-strong);border-radius:10px;background:var(--elevated,var(--card));box-shadow:0 8px 24px rgba(0,0,0,.28);font-size:11px;line-height:1.55}\n#oa-sys .tip b{display:block;margin-bottom:3px}\n#oa-sys .tip .r{display:flex;justify-content:space-between;gap:14px}\n#oa-sys .tip .r span:first-child{color:var(--muted)}\n#oa-sys .sec{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:10px;letter-spacing:.1em;text-transform:uppercase;margin-top:2px}\n#oa-sys .sec:after{content:"";flex:1;height:1px;background:var(--border)}\n</style>\n<div class="hd"><span class="dot" id="gwdot"></span><span class="ttl">\u7CFB\u7EDF\u72B6\u6001</span><span class="badge" id="gwbadge">\u8BFB\u53D6\u4E2D\u2026</span><span class="sp1"></span><span class="upd" id="upd">\u2014</span></div>\n<div class="grid" id="gmain">\n  <div class="t" data-tip="cpu"><span class="l">CPU \u5BBF\u4E3B \xB7 \u5B9E\u65F6</span><span class="v" id="vcpu">\u2014</span><span class="s" id="scpu">\u2014</span><div class="chart" id="ccpu"></div></div>\n  <div class="t" data-tip="cores"><span class="l">CPU \u5404\u6838 \xB7 \u5B9E\u65F6</span><div class="corebox" id="corebox"></div></div>\n  <div class="t" data-tip="mem"><span class="l">\u5185\u5B58 \u5BBF\u4E3B \xB7 \u5B9E\u65F6</span><span class="v" id="vmem">\u2014</span><span class="s" id="smem">\u2014</span><div class="chart" id="cmem"></div></div>\n  <div class="t" data-tip="net"><span class="l">\u7F51\u7EDC\u541E\u5410 \xB7 \u5B9E\u65F6</span><span class="v" id="vnet">\u2014</span><span class="s" id="snet">\u2014</span><div class="chart" id="cnet"></div></div>\n  <div class="t" data-tip="disk"><span class="l">\u78C1\u76D8 / \xB7 \u5B9E\u65F6</span><span class="v" id="vdisk">\u2014</span><span class="s" id="sdisk">\u2014</span><div class="chart" id="cdisk"></div></div>\n  <div class="t" data-tip="p99"><span class="l">\u5EF6\u8FDF P99 \xB7 \u5B9E\u65F6</span><span class="v" id="vp99">\u2014</span><span class="s" id="sp99">\u2014</span><div class="chart" id="cp99"></div></div>\n</div>\n<div class="sec">\u5B9E\u65F6\u6D3B\u52A8</div>\n<div class="grid" id="gact">\n  <div class="m" data-tip="sess"><span class="l">\u4F1A\u8BDD</span><span class="v" id="vsess">\u2014</span></div>\n  <div class="m" data-tip="cron"><span class="l">\u81EA\u52A8\u5316</span><span class="v" id="vcron">\u2014</span></div>\n  <div class="m" data-tip="agent"><span class="l">\u667A\u80FD\u4F53</span><span class="v" id="vagent">\u2014</span></div>\n  <div class="m" data-tip="chan"><span class="l">\u901A\u9053</span><span class="v" id="vchan">\u2014</span></div>\n</div>\n<div class="tip" id="tip"></div>\n</div>';
 function renderSysStatus(root, api) {
   const byId = (id) => root.querySelector('[id="' + id + '"]');
-  var TEAL = "#2f9e8f", WHITE = "#ffffff", MB = 1048576, HOST = "https://wxyg.tail2f3e0d.ts.net:18575/metrics.json", CAP = 80;
+  var TEAL = "#2f9e8f", WHITE = "#ffffff", MB = 1048576, HOST = "https://wxyg.tail2f3e0d.ts.net:18575/metrics.json?v=r6", CAP = 80;
   var MODE = { ccpu: "pct", cmem: "pct", cdisk: "pct", cnet: "abs", cp99: "abs" };
   var ABS = { cnet: { warn: 5 * MB, red: 15 * MB, unit: "MB/s" }, cp99: { warn: 200, red: 700, unit: "ms" } };
   function cssv(n, fb) {
@@ -313,27 +313,26 @@ function renderSysStatus(root, api) {
       return '<div class="core"><div class="crow"><span class="cl">\u6838 ' + i2 + "</span><b>" + (typeof v === "number" ? v + "%" : "\u2014") + '</b></div><div class="cchart" id="cc' + i2 + '"></div></div>';
     }).join("");
     for (var j = 0; j < vals.length; j++) {
-      spark(byId("cc" + j), coreHist[j] || [], 24);
+      spark(byId("cc" + j), coreHist[j] || [], 12);
     }
   }
   var rd = api.read;
   var fails = 0, lastOkAt = null;
-  var DIRECT_BASE = (function() {
-    try {
-      return (location.protocol || "https:") + "//" + (location.hostname || "wxyg.tail2f3e0d.ts.net") + ":18575";
-    } catch (e) {
-      return "https://wxyg.tail2f3e0d.ts.net:18575";
-    }
-  })();
+  var DIRECT_BASE = "https://wxyg.tail2f3e0d.ts.net:18575";
   var hostAt = 0, gwOk = null, directFrame = null, directSeen = false, directTriedAt = 0;
   function hostFresh() {
-    return hostAt > 0 && Date.now() - hostAt < 7e3;
+    var t = (gapNow || 3e3) + 6e3;
+    return hostAt > 0 && Date.now() - hostAt < t;
   }
   function badge() {
     var dd = byId("gwdot");
     if (dd) dd.className = "dot " + (gwOk === true || hostFresh() ? "ok" : "danger");
     if (gwOk === true) {
       set("gwbadge", "\u6B63\u5E38");
+      return;
+    }
+    if (gwOk === null) {
+      set("gwbadge", hostFresh() ? "\u6B63\u5E38" : "\u8BFB\u53D6\u4E2D\u2026");
       return;
     }
     if (gwOk === false && hostFresh()) {
@@ -347,8 +346,8 @@ function renderSysStatus(root, api) {
     set("gwbadge", "\u8BFB\u53D6\u4E2D\u2026");
   }
   function beat() {
-    var fresh = hostFresh();
-    set("upd", fresh ? "\u5B9E\u65F6 \xB7 " + hhmm() : outageText());
+    set("upd", lastFail ? "\u8BFB\u53D6\u5931\u8D25 \xB7 \u6700\u540E\u6210\u529F " + (lastOkAt ? hms(lastOkAt) : "\u2014") : "\u5B9E\u65F6 \xB7 " + hhmm());
+    badge();
     if (!directSeen && directTriedAt && Date.now() - directTriedAt > 2e4) {
       try {
         if (directFrame) directFrame.remove();
@@ -371,7 +370,7 @@ function renderSysStatus(root, api) {
     return "\u6700\u540E\u6210\u529F " + hms(lastOkAt) + " \xB7 \u5DF2\u5931\u8054 " + m + "\u5206" + (s < 10 ? "0" : "") + s + "\u79D2";
   }
   function render() {
-    set("upd", hostFresh() ? "\u5B9E\u65F6 \xB7 " + hhmm() : outageText());
+    set("upd", lastFail ? "\u8BFB\u53D6\u5931\u8D25 \xB7 \u6700\u540E\u6210\u529F " + (lastOkAt ? hms(lastOkAt) : "\u2014") : "\u5B9E\u65F6 \xB7 " + hhmm());
     set("scpu", (st.load ? st.load : "\u2014") + " \xB7 " + st.cores + " vCPU" + (st.busy != null ? " \xB7 \u7F51\u5173 " + st.busy + "%" : ""));
     set("smem", st.mem != null ? "\u5DF2\u7528 " + st.mem + "% \xB7 swap " + (st.swap || "\u2014") : "\u2014");
     set("snet", st.rx != null ? "\u2193 " + rate(st.rx) + " \xB7 \u2191 " + rate(st.tx) : "\u2014");
@@ -380,11 +379,96 @@ function renderSysStatus(root, api) {
       set("sdisk", "\u6307\u6807\u7AEF\u70B9\u672A\u8FDE\u901A \xB7 \u68C0\u67E5 18575");
     }
   }
+  var lastFail = false;
+  var BIZ = DIRECT_BASE + "/biz.json", bizSeq = 0, bizWait = {};
+  function bizPost(make) {
+    return new Promise(function(resolve) {
+      if (!directFrame) {
+        resolve(null);
+        return;
+      }
+      var id = ++bizSeq, done = false;
+      bizWait[id] = function(v) {
+        if (done) return;
+        done = true;
+        resolve(v);
+      };
+      try {
+        directFrame.contentWindow.postMessage(make(id), DIRECT_BASE);
+      } catch (e) {
+        delete bizWait[id];
+        resolve(null);
+        return;
+      }
+      setTimeout(function() {
+        if (done) return;
+        done = true;
+        delete bizWait[id];
+        resolve(null);
+      }, 1200);
+    });
+  }
+  async function bizRead() {
+    try {
+      var ctl = typeof AbortController !== "undefined" ? new AbortController() : null;
+      var to = ctl ? setTimeout(function() {
+        try {
+          ctl.abort();
+        } catch (e) {
+        }
+      }, 2500) : 0;
+      var r = await fetch(BIZ, { cache: "no-store", signal: ctl ? ctl.signal : void 0 });
+      if (to) clearTimeout(to);
+      if (r.ok) return await r.json();
+    } catch (e) {
+    }
+    return await bizPost(function(id) {
+      return { type: "biz.get", id };
+    });
+  }
+  function bizWrite(key, at, v) {
+    var p = {};
+    p[key] = { at, v };
+    try {
+      fetch(BIZ, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ data: p }) }).catch(function() {
+      });
+    } catch (e) {
+    }
+  }
+  var bizSnap = null, bizSnapAt = 0;
+  async function bizSnapshot() {
+    var now = Date.now();
+    if (bizSnap && now - bizSnapAt < 3500) return bizSnap;
+    var b = await bizRead();
+    if (b) {
+      bizSnap = b;
+      bizSnapAt = Date.now();
+    }
+    return b;
+  }
+  async function bizSlot(key, ttl, fetchFn) {
+    var b = await bizSnapshot(), s = b && b.data ? b.data[key] : null;
+    if (s && typeof s.at === "number" && Date.now() - s.at < ttl) return s.v;
+    await new Promise(function(r) {
+      setTimeout(r, 120 + Math.random() * 180);
+    });
+    var b2 = await bizSnapshot(), s2 = b2 && b2.data ? b2.data[key] : null;
+    if (s2 && typeof s2.at === "number" && Date.now() - s2.at < ttl) return s2.v;
+    var v = await fetchFn();
+    var stamp = Date.now();
+    bizWrite(key, stamp, v);
+    if (bizSnap && bizSnap.data) {
+      bizSnap.data[key] = { at: stamp, v };
+      bizSnapAt = stamp;
+    }
+    return v;
+  }
   async function hostTick() {
-    if (hostFresh()) return;
     try {
       applyMetrics(await gatewayMetrics());
+      lastFail = false;
     } catch (e) {
+      lastFail = true;
       st.hostOk = false;
     }
   }
@@ -451,16 +535,37 @@ function renderSysStatus(root, api) {
     if (!directFrame || ev.source !== directFrame.contentWindow) return;
     if (ev.origin !== DIRECT_BASE) return;
     var m = ev.data;
-    if (!m || m.type !== "sysmetrics.metrics" || !m.data) return;
+    if (!m || typeof m !== "object") return;
+    if (m.type === "biz.result") {
+      var cb = bizWait[m.id];
+      if (cb) {
+        delete bizWait[m.id];
+        cb(m.data || null);
+      }
+      return;
+    }
+    if (m.type === "biz.ack") {
+      var ac = bizWait[m.id];
+      if (ac) {
+        delete bizWait[m.id];
+        ac(true);
+      }
+      return;
+    }
+    if (m.type !== "sysmetrics.metrics" || !m.data) return;
     directSeen = true;
     applyMetrics(m.data);
     render();
   }
+  var fastBusy = false;
   async function fastTick() {
+    if (fastBusy) return;
     if (!rd) {
       gwOk = false;
     } else try {
-      var H = await rd("health");
+      var H = await bizSlot("health", 2500, function() {
+        return rd("health");
+      });
       var ok = H && H.running !== false && H.connected !== false;
       gwOk = !!ok;
       var dd = byId("gwdot");
@@ -494,22 +599,31 @@ function renderSysStatus(root, api) {
     }
     render();
   }
+  var slowBusy = false;
   async function slowTick() {
-    if (!rd) return;
+    if (!rd || slowBusy) return;
+    slowBusy = true;
     try {
-      var s = await rd("sessions.list");
+      var s = await bizSlot("sess", 2500, function() {
+        return rd("sessions.list", { limit: 1 });
+      });
       var a = arr(s, ["sessions", "items", "rows"]);
-      set("vsess", a ? a.length : "\u2014");
+      var n = s && typeof s.totalCount === "number" ? s.totalCount : a ? a.length : "\u2014";
+      set("vsess", n);
     } catch (e) {
     }
     try {
-      var c = await rd("cron.list");
+      var c = await bizSlot("cron", 2500, function() {
+        return rd("cron.list");
+      });
       var j = arr(c, ["jobs", "items", "rows"]);
       set("vcron", j ? j.length : "\u2014");
     } catch (e) {
     }
     try {
-      var g = await rd("agents.list");
+      var g = await bizSlot("agent", 2500, function() {
+        return rd("agents.list");
+      });
       var ag = arr(g, ["agents", "items"]);
       set("vagent", ag ? ag.length : "\u2014");
     } catch (e) {
@@ -576,26 +690,47 @@ function renderSysStatus(root, api) {
     fastTick();
     slowTick();
   }
-  function onVisible() {
+  function onNetwork() {
     if (!document.hidden) refreshAll();
   }
-  function onNetwork() {
+  var timers = [], beatTimer = 0, relayoutTimer = setTimeout(relayout, 250), onScreen = true, gapNow = 0;
+  function startPolling() {
+    var gap = onScreen ? 3e3 : 15e3;
+    if (timers.length && gapNow === gap) return;
+    stopPolling();
     refreshAll();
+    render();
+    timers = [setInterval(hostTick, gap), setInterval(fastTick, gap), setInterval(slowTick, gap)];
+    gapNow = gap;
+    beatTimer = setInterval(beat, 1e3);
+  }
+  function stopPolling() {
+    for (var i = 0; i < timers.length; i++) clearInterval(timers[i]);
+    timers.length = 0;
+    gapNow = 0;
+    if (beatTimer) {
+      clearInterval(beatTimer);
+      beatTimer = 0;
+    }
+  }
+  function syncPolling() {
+    if (document.hidden) {
+      stopPolling();
+      return;
+    }
+    startPolling();
+  }
+  function onVisible() {
+    syncPolling();
   }
   window.addEventListener("message", onDirect);
   startDirect();
-  var timers = [setInterval(hostTick, 3e3), setInterval(fastTick, 3e3), setInterval(slowTick, 3e3)];
-  var beatTimer = setInterval(beat, 1e3);
-  var relayoutTimer = setTimeout(relayout, 250);
   document.addEventListener("visibilitychange", onVisible);
   window.addEventListener("online", onNetwork);
   window.addEventListener("offline", onNetwork);
-  refreshAll();
-  render();
+  syncPolling();
   return function stop() {
-    for (var i = 0; i < timers.length; i++) clearInterval(timers[i]);
-    timers.length = 0;
-    clearInterval(beatTimer);
+    stopPolling();
     clearTimeout(relayoutTimer);
     window.removeEventListener("message", onDirect);
     if (directFrame) {

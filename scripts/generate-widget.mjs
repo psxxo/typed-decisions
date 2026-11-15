@@ -19,17 +19,28 @@ const assetPath = join(rootDir, "assets", "sys-status-widget.html");
 const outPath = join(rootDir, "src", "generated-sys-status-html.ts");
 
 const html = await readFile(assetPath, "utf8");
-const openTag = "<script>";
-const closeTag = "</script>";
-const open = html.indexOf(openTag);
-const close = html.lastIndexOf(closeTag);
-if (open < 0 || close < 0 || close < open) {
-  throw new Error("assets/sys-status-widget.html: expected one <script> block");
+// 资产可能是一整页，且带重复的桥接壳副本。只认唯一一份：
+// 取最后一层文档、剥掉全部脚本得到标记，单独取渲染 #oa-sys 的看板脚本。
+const pageStart = html.toLowerCase().lastIndexOf("<!doctype html>");
+const page = pageStart >= 0 ? html.slice(pageStart) : html;
+const scriptBlocks = [...page.matchAll(/<script>([\s\S]*?)<\/script>/gi)].map((m) => m[1]);
+const widgetScript = scriptBlocks.find((s) => s.includes('getElementById("oa-sys")'));
+if (!widgetScript) {
+  throw new Error("assets/sys-status-widget.html: no script block renders #oa-sys");
 }
 
-const markup = html.slice(0, open).trimEnd();
+// 标记只取看板本体：body 内、去掉全部脚本。
+// 页面级样式（:root / * / html,body / 滚动条）会污染 Control UI 外壳，必须排除，
+// 因此不从 <head> 取任何内容；看板自己的样式本来就内联在 #oa-sys 容器里。
+const bodyStart = page.toLowerCase().lastIndexOf("<body");
+const pageBody = bodyStart >= 0 ? page.slice(bodyStart) : page;
+const markup = pageBody
+  .replace(/^<body[^>]*>/i, "")
+  .replace(/<\/body>[\s\S]*$/i, "")
+  .replace(/<script>[\s\S]*?<\/script>/gi, "")
+  .trim();
 
-let body = html.slice(open + openTag.length, close);
+let body = widgetScript;
 body = body.replace(/^\s*\(function\s*\(\)\s*\{/, "");
 body = body.replace(/\}\)\(\)\s*;?\s*$/, "");
 body = body.replace(/\bvar root\s*=\s*document\.getElementById\("oa-sys"\);\s*if\s*\(!root\)\s*return;/, "");
