@@ -1,6 +1,6 @@
 {
   "name": "@psxxo/typed-decisions",
-  "version": "1.6.14",
+  "version": "1.6.15",
   "description": "System One typed decision provider for OpenClaw's decisionModel role: choice / score / boolean judgments with probability distributions.",
   "type": "module",
   "license": "MIT",
@@ -8,6 +8,7 @@
     "index.js",
     "openclaw.plugin.json",
     "README.md",
+    "INSTALL.md",
     "CHANGELOG.md",
     "assets",
     "src",

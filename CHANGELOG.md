@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.6.15 (2026-11-15)
+
+Add a one-page install checklist for a fresh machine.
+
+- INSTALL.md covers the four steps a new install needs: install the plugin and
+  allow it, run scripts/install-sysmetrics.sh for the metrics endpoint, set the
+  decision endpoint plus a 0600 credential file, then opt into the nudge lanes.
+  Every step carries its own verification command and the symptom when skipped.
+- No credential ships in the package. The document uses placeholders only and
+  states the 0600/0700 file rules; the real key stays in
+  ~/.openclaw/.secrets/decision-model.key on the host.
+
 ## 1.6.14 (2026-11-15)
 
 Ship the pieces that were committed but never packed.
