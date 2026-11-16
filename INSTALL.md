@@ -97,7 +97,7 @@ chmod 600 ~/.openclaw/.secrets/decision-model.key
 
 - `sysStatus.netOrigins` 必填；为空时插件判定未配置数据源，不会自动挂板
 - 挂载内容取插件内置模板 `assets/sys-status-widget.html`（sha256 `0494d32a892e`），与参考看板逐字节一致
-- 归档清理由插件启动时注册的 `session:patch` 钩子完成，随安装生效，无需额外配置
+- 归档清理由插件启动时注册的 `session:patch` 钩子完成，随安装生效，无需额外配置；清理走网关 `board.get` / `board.update`（先 `widget_remove` 再 `tab_delete`），不走直连 SQLite
 
 ## 验收清单
 

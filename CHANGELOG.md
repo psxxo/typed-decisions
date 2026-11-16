@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.6.19 (2026-11-17)
+
+Archived sessions really lose their board: cleanup goes through the gateway board RPC instead of deleting SQLite rows.
+
+- The 1.6.18 hook deleted `board_widgets`/`board_tabs` rows directly. That bypasses the gateway board store, so the session's `hasBoard` projection stayed true and `/dashboards` kept listing the archived thread (verified 2026-11-17: rows gone, `sessions.list {archived:"all",hasBoard:true}` still returned it).
+- Cleanup now calls `board.get`, removes every widget with `board.update` `widget_remove`, deletes every tab with `tab_delete`, and re-reads `board.get` to log what is left.
+- The same code ships in `src/board-archive-hook.js` (registered in-plugin) and in the packaged `hooks/board-archive-unpin/handler.js`.
+
 ## 1.6.18 (2026-11-16)
 
 Fresh installs now get a working board path end to end.

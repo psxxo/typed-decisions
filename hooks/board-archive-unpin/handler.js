@@ -11,26 +11,11 @@ function pick(obj, keys) {
   for (const k of keys) { const v = obj && obj[k]; if (typeof v === "string" && v) return v; }
   return null;
 }
-function sessionKeyOf(e) {
-  return pick(e, ["sessionKey"]) || pick(e?.context || {}, ["sessionKey", "key"]) || pick(e?.payload || {}, ["sessionKey", "key"]);
-}
-function patchOf(e) {
-  for (const c of [e?.patch, e?.payload?.patch, e?.data?.patch, e?.context?.patch]) {
-    if (c && typeof c === "object") return c;
-  }
-  return null;
-}
-function looksArchived(e, patch) {
-  if (patch && patch.archived === true) return true;
-  if (e?.archived === true) return true;
-  const ctx = e?.context;
-  return Boolean(ctx && (ctx.archived === true || ctx.archivedAt));
-}
 function call(method, params) {
   return new Promise((resolve) => {
-    execFile(BIN, ["gateway", "call", method, "--params", JSON.stringify(params)], { timeout: 20000 }, (err, stdout) => {
-      if (err) { log(method + " FAILED " + (err.message || "")); resolve(null); return; }
-      try { resolve(JSON.parse(stdout.slice(stdout.indexOf("{")))); } catch { resolve(null); }
+    execFile(BIN, ["gateway", "call", method, "--params", JSON.stringify(params)], { timeout: 30000 }, (err, stdout) => {
+      if (err) return resolve({ error: String(err.message || err) });
+      try { resolve(JSON.parse(String(stdout).slice(String(stdout).indexOf("{")))); } catch { resolve({ error: "bad json" }); }
     });
   });
 }
@@ -39,16 +24,27 @@ export default async function handler(event) {
   try {
     const type = pick(event, ["type", "event", "name", "eventKey"]) || "";
     if (type !== "session" && type !== "session:patch") return;
-    const patch = patchOf(event);
-    if (!looksArchived(event, patch)) return;
-    const key = sessionKeyOf(event);
-    if (!key) { log("archived but no sessionKey"); return; }
+    if (type === "session" && event.action && event.action !== "patch") return;
+    const patch = event?.patch || event?.payload?.patch || event?.data?.patch || event?.context?.patch;
+    const archived = (patch && patch.archived === true) || event?.archived === true || Boolean(event?.context && (event.context.archived === true || event.context.archivedAt));
+    if (!archived) return;
+    const key = pick(event, ["sessionKey"]) || pick(event?.context || {}, ["sessionKey", "key"]);
+    if (!key) return;
     const board = await call("board.get", { sessionKey: key });
-    const widgets = board?.widgets || [];
+    if (board.error) { log("board.get FAILED " + key + " :: " + board.error); return; }
+    const widgets = Array.isArray(board.widgets) ? board.widgets : [];
+    const tabs = Array.isArray(board.tabs) ? board.tabs : [];
+    if (widgets.length === 0 && tabs.length === 0) { log("board already empty " + key); return; }
     for (const w of widgets) {
-      await call("board.update", { sessionKey: key, ops: [{ kind: "widget_remove", name: w.name }] });
+      const r = await call("board.update", { sessionKey: key, ops: [{ kind: "widget_remove", name: w.name }] });
+      if (r.error) log("widget_remove FAILED " + w.name + " :: " + r.error);
     }
-    log("board cleared " + key + " widgets=" + widgets.length + " tabs=" + (board?.tabs || []).length);
+    for (const t of tabs) {
+      const r = await call("board.update", { sessionKey: key, ops: [{ kind: "tab_delete", tabId: t.tabId }] });
+      if (r.error) log("tab_delete FAILED " + t.tabId + " :: " + r.error);
+    }
+    const after = await call("board.get", { sessionKey: key });
+    log("board cleared " + key + " widgets=" + widgets.length + " tabs=" + tabs.length + " left=" + ((after.widgets || []).length) + "/" + ((after.tabs || []).length));
   } catch (e) {
     log("handler error " + (e && e.message));
   }
