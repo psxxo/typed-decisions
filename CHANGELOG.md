@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.6.17 (2026-11-16)
+
+Auto-mounted boards now use the plugin's own snapshot template instead of a plugin-rendered widget.
+
+- The nudge wrote a plugin widget, which rendered differently from the snapshot every existing board carries (disk available read 761 GB instead of 76 GB).
+- The plugin already ships assets/sys-status-widget.html, byte-identical to the reference snapshot (sha256 0494d32a892e, 66,813 bytes). The nudge now writes that snapshot: contentKind html, 12x8, position 0, full-bleed manifest, granted with granted_sha equal to sha256.
+- Automation surfaces are skipped: :subagent:, :cron: and :openai: sessions never receive a board.
+
 ## 1.6.16 (2026-11-16)
 
 Stop the board nudge on automation surfaces.

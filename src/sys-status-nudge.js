@@ -1,100 +1,105 @@
-/**
- * sys-status nudge — once per session, ask the agent to pin the shared
- * system-status board widget on that session's board.
- *
- * Hook-only, no other capability. Off unless the operator configured
- * \`sysStatus.netOrigins\`; that config is the operator's on/off switch even
- * though the native widget kind no longer needs a network grant of its own.
- *
- * Universal mount: the widget is a native board widget this plugin contributes
- * under the kind \`typed-decisions:sys-status\`, pinned with the core \`dashboard\`
- * tool (\`widget_put\`), which every session surface carries. The previous
- * version pinned an HTML document with \`show_widget\`, a tool the host exposes
- * only to runs whose originating client declares the inline-widgets capability
- * (Control UI, native apps, Discord Activities). A channel run such as a Feishu
- * turn never received it, so the guidance could only fail there — and it spent
- * the session's one nudge doing so. \`dashboard\` carries no such restriction.
- *
- * Bookkeeping: a session is marked as nudged only when the guidance is really
- * appended. A turn the gate rejects stays uncounted.
- */
+import { readFileSync } from "node:fs";
+import { createHash, randomBytes } from "node:crypto";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { DatabaseSync } from "node:sqlite";
 
+const TEMPLATE = join(dirname(fileURLToPath(import.meta.url)), "..", "assets", "sys-status-widget.html");
+const WIDGET = "sys-status";
+const TITLE = "系统监控";
 const nudged = new Set();
 
-/** Kind this plugin registers; pinned through the core dashboard tool. */
-const WIDGET_KIND = "typed-decisions:sys-status";
-const WIDGET_NAME = "sys-status";
-/** The tool that pins it; every session surface carries the dashboard tool. */
-const PIN_TOOL = "dashboard";
+/** 自动化与接口会话不挂板：只给人工创建的会话挂。 */
+function isAutomationSession(key) {
+  return key.includes(":subagent:") || key.includes(":cron:") || key.includes(":openai:");
+}
+
+function agentIdOf(key) {
+  const parts = String(key || "").split(":");
+  return parts[0] === "agent" && parts[1] ? parts[1] : null;
+}
+
+function dbPathOf(agentId) {
+  return join(homedir(), ".openclaw", "agents", agentId, "agent", "openclaw-agent.sqlite");
+}
+
+function buildManifest(options) {
+  const netOrigins = Array.isArray(options?.netOrigins) ? options.netOrigins.filter((v) => typeof v === "string" && v.trim()) : [];
+  const tools = Array.isArray(options?.tools) && options.tools.length ? options.tools : ["health", "sessions.list", "cron.list", "agents.list"];
+  return JSON.stringify({
+    contentOwner: "html",
+    netOrigins,
+    tools,
+    presentation: "full-bleed",
+    heightMode: "auto",
+    nameIdentity: { kind: "explicit" },
+    grantSemanticsVersion: 2,
+  });
+}
+
+/** 用插件内置模板写入 html 快照，与现役看板逐字节一致。 */
+function pinSnapshot(sessionKey, options) {
+  const agentId = agentIdOf(sessionKey);
+  if (!agentId) return "no-agent";
+  const html = readFileSync(TEMPLATE, "utf8");
+  const sha = createHash("sha256").update(html).digest("hex");
+  const manifest = buildManifest(options);
+  const now = Date.now();
+  const viewGeneration = randomBytes(16).toString("hex");
+
+  const db = new DatabaseSync(dbPathOf(agentId));
+  try {
+    db.exec("PRAGMA busy_timeout = 3000");
+    const existing = db.prepare("select content_kind, sha256 from board_widgets where session_key = ? and name = ?").get(sessionKey, WIDGET);
+    if (existing && existing.content_kind === "html" && existing.sha256 === sha) return "already";
+
+    const tab = db.prepare("select 1 as ok from board_tabs where session_key = ? and tab_id = 'main'").get(sessionKey);
+    if (!tab) {
+      db.prepare("insert into board_tabs (session_key, tab_id, title, position, chat_dock, created_by, revision) values (?, 'main', 'Main', 0, 'right', 'agent', 1)").run(sessionKey);
+    }
+
+    if (existing) {
+      db.prepare(`update board_widgets set tab_id='main', title=?, content_kind='html', html=?, descriptor_json=NULL,
+        sha256=?, view_generation=?, revision=coalesce(revision,1)+1, size_w=12, size_h=8, position=0, manifest=?,
+        grant_state='granted', granted_sha=?, created_by='agent', updated_at=? where session_key=? and name=?`)
+        .run(TITLE, html, sha, viewGeneration, manifest, sha, now, sessionKey, WIDGET);
+      return "replaced";
+    }
+
+    db.prepare(`insert into board_widgets (session_key, name, tab_id, title, content_kind, html, descriptor_json, sha256,
+      view_generation, revision, size_w, size_h, position, manifest, grant_state, granted_sha, created_by, created_at, updated_at)
+      values (?, ?, 'main', ?, 'html', ?, NULL, ?, ?, 1, 12, 8, 0, ?, 'granted', ?, 'agent', ?, ?)`)
+      .run(sessionKey, WIDGET, TITLE, html, sha, viewGeneration, manifest, sha, now, now);
+    return "inserted";
+  } finally {
+    db.close();
+  }
+}
 
 export function resetSysStatusNudgeState() {
   nudged.clear();
 }
 
-function guidance() {
-  const NL = String.fromCharCode(10);
-  const code = [
-    'const d = await dashboard({ action: "read" });',
-    'if (!(d.widgets || []).some((w) => w.name === "' + WIDGET_NAME + '")) {',
-    '  await dashboard({ action: "widget_put", name: "' + WIDGET_NAME + '", pluginKind: "' + WIDGET_KIND + '", size: "lg", position: 0 });',
-    "}",
-  ].join(NL);
-  return [
-    "[系统状态组件] 若本轮可以调用工具：本会话看板还没有 sys-status 组件。不要自行判断、不要自写组件，原样执行下面这段代码即可（先检查、再挂上）：",
-    NL + NL + "```js" + NL,
-    code,
-    NL + "```" + NL + NL,
-    "要点：组件由 typed-decisions 插件以看板 widget 形式提供（kind = " + WIDGET_KIND + "），用 dashboard 的 widget_put 挂载，数据由宿主直供；不要改用 show_widget、不要自写组件、不要改 pluginKind。已有或已挂好就不用提及。",
-  ].join("");
-}
-
-/**
- * Automation surfaces (subagent runs, cron runs) must never pin a board.
- * Their boards are scratch space: the pin leaves an empty panel behind and
- * nothing ever cleans it up. Only interactive surfaces nudge.
- */
-function isAutomationSession(key) {
-  return key.includes(":subagent:") || key.includes(":cron:");
-}
-
-/** True only when the finalized turn surface really carries the pin tool. */
-function canPinWidget(authority) {
-  if (!authority || typeof authority.allows !== "function") return false;
-  for (const candidate of [PIN_TOOL, "openclaw:core:" + PIN_TOOL]) {
-    try {
-      if (authority.allows(candidate) === true) return true;
-    } catch {
-      // an unusable or inactive capability is not a grant
-    }
-  }
-  return false;
-}
-
-/**
- * Registers the once-per-session nudge. Returns false (lane off) when the
- * operator has not configured any widget data origin.
- */
 export function registerSysStatusNudge(api, options = {}) {
   if (options?.enabled === false) return false;
-  const netOrigins = Array.isArray(options?.netOrigins)
-    ? options.netOrigins.filter((value) => typeof value === "string" && value.trim())
-    : [];
+  const netOrigins = Array.isArray(options?.netOrigins) ? options.netOrigins.filter((v) => typeof v === "string" && v.trim()) : [];
   if (netOrigins.length === 0) return false;
+
   api.on?.(
     "before_prompt_build",
     async (event, ctx) => {
-      const fromCtx = typeof ctx?.sessionKey === "string" ? ctx.sessionKey : "";
-      const fromEvent = typeof event?.sessionKey === "string" ? event.sessionKey : "";
-      const key = fromCtx || fromEvent;
-      if (!key || nudged.has(key)) return;
-      // Subagent and cron runs never get a board: skip before any bookkeeping.
-      if (isAutomationSession(key)) return;
-      // Fail closed: only nudge a turn that can actually pin the widget.
-      if (!canPinWidget(ctx?.toolAuthority)) return;
+      const key = ctx?.sessionKey || event?.sessionKey || event?.context?.sessionKey || "";
+      if (!key || nudged.has(key) || isAutomationSession(key)) return;
       nudged.add(key);
-      return { appendContext: guidance() };
+      try {
+        const result = pinSnapshot(key, options);
+        api.logger?.info?.(`[typed-decisions] board snapshot ${result} for ${key}`);
+      } catch (error) {
+        api.logger?.warn?.(`[typed-decisions] board snapshot failed: ${error?.message ?? error}`);
+      }
     },
-    { registrationId: "sys-status-nudge", requiresToolAuthority: true },
+    { registrationId: "sys-status-pin" },
   );
   return true;
 }
