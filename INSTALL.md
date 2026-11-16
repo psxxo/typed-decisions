@@ -73,6 +73,32 @@ chmod 600 ~/.openclaw/.secrets/decision-model.key
 | 自动挂看板提醒 | `sysStatus.widgetPath` 或 `sysStatus.netOrigins` 提供数据源 |
 | 归档自动摘看板 | `hooks/board-archive-unpin` 随包安装，无需配置 |
 
+## 看板自动挂载的配置要求
+
+插件装了不会自动挂板，必须给它数据源：
+
+```json
+{
+  "plugins": {
+    "entries": {
+      "typed-decisions": {
+        "config": {
+          "sysStatus": {
+            "enabled": true,
+            "netOrigins": ["https://<你的指标端点>:18575"],
+            "tools": ["health", "sessions.list", "cron.list", "agents.list"]
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+- `sysStatus.netOrigins` 必填；为空时插件判定未配置数据源，不会自动挂板
+- 挂载内容取插件内置模板 `assets/sys-status-widget.html`（sha256 `0494d32a892e`），与参考看板逐字节一致
+- 归档清理由插件启动时注册的 `session:patch` 钩子完成，随安装生效，无需额外配置
+
 ## 验收清单
 
 - [ ] `openclaw plugins list` 里 `typed-decisions` 为 enabled

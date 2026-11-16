@@ -21,6 +21,7 @@ import { join } from "node:path";
 import { readFile, writeFile, stat } from "node:fs/promises";
 import { request as httpsRequest } from "node:https";
 import { registerSysStatusNudge } from "./src/sys-status-nudge.js";
+import { registerBoardArchiveHook } from "./src/board-archive-hook.js";
 
 // Per-session 「决策介入」 state. The Control UI accessory writes it through the
 // host's `sessions.pluginPatch` method; the prompt hook below reads it and
@@ -401,6 +402,12 @@ export default definePluginEntry({
       registerSysStatusNudge(api, config.sysStatus);
     } catch (error) {
       api.logger?.warn?.(`[${PLUGIN_ID}] sys-status nudge unavailable: ${error?.message ?? error}`);
+    }
+    // 归档会话时清空该会话的看板（插件内注册，随插件安装即可用）。
+    try {
+      registerBoardArchiveHook(api);
+    } catch (error) {
+      api.logger?.warn?.(`[${PLUGIN_ID}] archive hook unavailable: ${error?.message ?? error}`);
     }
     const keyCache = { path: undefined, value: undefined, mtimeMs: 0, checkedAt: 0 };
 

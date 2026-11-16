@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.6.18 (2026-11-16)
+
+Fresh installs now get a working board path end to end.
+
+- Mount writes the bundled snapshot (66,813 bytes, sha256 0494d32a892e) with grant_state granted and the canonical manifest, then fires one equal-value widget_resize so the Control UI repaints without a manual refresh.
+- The archive hook is registered inside the plugin via api.registerHook with the session:patch event, so installing the plugin is enough to clear a session board on archive.
+- Host-side board.widget.put was rejected as a path: it returns grant_state none for html content and materialises a different payload (84,503 bytes), which renders every board blank.
+- INSTALL.md documents the required sysStatus.netOrigins data origin.
+
 ## 1.6.17 (2026-11-16)
 
 Auto-mounted boards now use the plugin's own snapshot template instead of a plugin-rendered widget.
